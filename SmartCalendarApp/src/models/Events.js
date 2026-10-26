@@ -85,7 +85,7 @@ class Event {
     }
 
     toString() {
-    return `Title: ${this.#title}\nDate: ${this.#date}\nStart Time: ${this.#startTime}\nEnd Time: ${this.#endTime}\nLocation: ${this.#location ?? "NA"}\nColor: ${this.#catColor ?? "NA"}`;
+    return `{Title: ${this.#title}, Date: ${this.#date}, Start Time: ${this.#startTime}, End Time: ${this.#endTime}, Location: ${this.#location ?? "NA"}, Color: ${this.#catColor ?? "NA"}}`;
     }
 }
 module.exports = Event;
