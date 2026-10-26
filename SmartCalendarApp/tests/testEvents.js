@@ -38,7 +38,7 @@ const event4 = new Event(
     "2026-10-26",
     "10:00",
     "12:00",
-    "LSB Building",
+    "LSB 106",
     "Blue"
 );
 console.log("Event 4: \n" + event4.toString());
