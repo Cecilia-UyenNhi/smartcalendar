@@ -3,6 +3,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const calendarElement = document.getElementById("calendar");
 
   const calendar = new FullCalendar.Calendar(calendarElement, {
+    themeSystem: "monarch",
     initialView: "dayGridMonth",
 
     headerToolbar: {
