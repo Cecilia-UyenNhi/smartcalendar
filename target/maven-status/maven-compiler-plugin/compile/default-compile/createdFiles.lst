@@ -1,0 +1,10 @@
+smartcalendar\observers\CalendarObserver.class
+smartcalendar\gui\SmartCalendarUI.class
+smartcalendar\Main.class
+smartcalendar\gui\SmartCalendarUI$1.class
+smartcalendar\observers\CalendarView.class
+smartcalendar\services\CalendarService.class
+smartcalendar\observers\WeeklySchedView.class
+smartcalendar\models\Event.class
+smartcalendar\database\EventRepo.class
+smartcalendar\database\DataManager.class
