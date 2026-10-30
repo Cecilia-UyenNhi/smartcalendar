@@ -1198,17 +1198,75 @@ public class SmartCalendarUI {
             );
 
             // Use Facade, not direct repository calls.
-            if (editingOriginal == null) {
+            // Check conflicts before saving.
+List<Event> conflicts;
 
-                facade.addEvent(updated);
+if (editingOriginal == null) {
+    conflicts = facade.getConflictingEvents(updated);
+} else {
+    // Avoid treating the original event as a conflict
+    // when editing it.
+    conflicts = facade.getConflictingEvents(updated);
+    conflicts.removeIf(ev ->
+        ev.getTitle().equals(editingOriginal.getTitle())
+        && ev.getDate().equals(editingOriginal.getDate())
+        && ev.getStartTime().equals(editingOriginal.getStartTime())
+        && ev.getEndTime().equals(editingOriginal.getEndTime())
+    );
+}
 
-            } else {
+if (!conflicts.isEmpty()) {
 
-                facade.editEvent(
-                    editingOriginal,
-                    updated
-                );
-            }
+    StringBuilder details = new StringBuilder();
+
+    for (Event ev : conflicts) {
+        details.append(
+            ev.getTitle() + " (" +
+            ev.getStartTime() + " - " +
+            ev.getEndTime() + ")\n"
+        );
+    }
+
+    Alert warning = new Alert(
+        Alert.AlertType.CONFIRMATION
+    );
+
+    warning.setTitle("Scheduling Conflict");
+    warning.setHeaderText(
+        "This event overlaps with another event!"
+    );
+    warning.setContentText(
+        details + "\nDo you want to save anyway?"
+    );
+
+    ButtonType saveAnyway =
+        new ButtonType("Save Anyway");
+
+    ButtonType cancel =
+        new ButtonType(
+            "Cancel",
+            ButtonBar.ButtonData.CANCEL_CLOSE
+        );
+
+    warning.getButtonTypes().setAll(
+        saveAnyway, cancel
+    );
+
+    Optional<ButtonType> response =
+        warning.showAndWait();
+
+    if (response.isEmpty()
+        || response.get() != saveAnyway) {
+        return;
+    }
+}
+
+// Save using Facade and Command pattern.
+if (editingOriginal == null) {
+    facade.addEvent(updated);
+} else {
+    facade.editEvent(editingOriginal, updated);
+}
 
             selected = editorDate.getValue();
             shown = YearMonth.from(selected);
