@@ -4,6 +4,8 @@ D:\smartcalendar\src\main\java\smartcalendar\commands\DeleteEvent.java
 D:\smartcalendar\src\main\java\smartcalendar\commands\EditEvent.java
 D:\smartcalendar\src\main\java\smartcalendar\database\DataManager.java
 D:\smartcalendar\src\main\java\smartcalendar\database\EventRepo.java
+D:\smartcalendar\src\main\java\smartcalendar\gui\CategoryColors.java
+D:\smartcalendar\src\main\java\smartcalendar\gui\ChatBubble.java
 D:\smartcalendar\src\main\java\smartcalendar\gui\SmartCalendarUI.java
 D:\smartcalendar\src\main\java\smartcalendar\Main.java
 D:\smartcalendar\src\main\java\smartcalendar\models\Event.java
