@@ -11,7 +11,7 @@ import smartcalendar.database.EventRepo;
 import smartcalendar.models.Event;
 import smartcalendar.observers.*;
 import smartcalendar.services.CalendarService;
-import smartcalendar.commands.*;
+import smartcalendar.services.CalendarFacade;
 
 import java.time.*;
 import java.time.format.TextStyle;
@@ -23,6 +23,7 @@ public class SmartCalendarUI {
 
     private final CalendarService service = new CalendarService();
     private final EventRepo repo = new EventRepo();
+    private final CalendarFacade facade;
 
     private final GridPane monthGrid = new GridPane();
     private final ListView<Event> weeklyList = new ListView<>();
@@ -45,6 +46,7 @@ public class SmartCalendarUI {
     private static final String SELECTED_BLUE = "#A9CFF2";
 
     public SmartCalendarUI() {
+            facade = new CalendarFacade(repo, service);
 
         // ========================================
         // 1. CALENDAR CONTROLS
@@ -123,11 +125,7 @@ public class SmartCalendarUI {
                 && answer.get() == ButtonType.YES) {
 
                 try {
-                    // Command Design Pattern
-                    CalendarCommand command =
-                        new DeleteEvent(eventToDelete, repo, service);
-
-                    command.execute();
+                    facade.deleteEvent(eventToDelete);
 
                     clearEventSelection();
 
@@ -906,15 +904,11 @@ public class SmartCalendarUI {
                     color.getText()
                 );
 
-                CalendarCommand command;
-
                 if (old == null) {
-                command = new AddEvent(updated, repo, service);
+                    facade.addEvent(updated);
                 } else {
-                command = new EditEvent(old, updated, repo, service);
+                    facade.editEvent(old, updated);
                 }
-
-                command.execute();
 
                 selected = date.getValue();
                 shown = YearMonth.from(

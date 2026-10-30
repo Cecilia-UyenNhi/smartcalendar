@@ -10,4 +10,13 @@ D:\smartcalendar\src\main\java\smartcalendar\models\Event.java
 D:\smartcalendar\src\main\java\smartcalendar\observers\CalendarObserver.java
 D:\smartcalendar\src\main\java\smartcalendar\observers\CalendarView.java
 D:\smartcalendar\src\main\java\smartcalendar\observers\WeeklySchedView.java
+D:\smartcalendar\src\main\java\smartcalendar\services\CalendarFacade.java
 D:\smartcalendar\src\main\java\smartcalendar\services\CalendarService.java
+D:\smartcalendar\src\main\java\smartcalendar\services\CategoryService.java
+D:\smartcalendar\src\main\java\smartcalendar\services\ConflictService.java
+D:\smartcalendar\src\main\java\smartcalendar\services\FreeTimeService.java
+D:\smartcalendar\src\main\java\smartcalendar\services\ImportService.java
+D:\smartcalendar\src\main\java\smartcalendar\services\QueryService.java
+D:\smartcalendar\src\main\java\smartcalendar\strategies\FreeTimeStrategy.java
+D:\smartcalendar\src\main\java\smartcalendar\strategies\HourlyFreeTime.java
+D:\smartcalendar\src\main\java\smartcalendar\strategies\WeeklyFreeTime.java
