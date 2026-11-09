@@ -48,24 +48,9 @@ public class WeeklyFreeTime implements FreeTimeStrategy {
 
             if (windowStart.isBefore(windowEnd)) {
 
-                // The hourly strategy requires one date.
-                // End at 23:59 for full-day windows.
-                LocalDateTime hourlyEnd = windowEnd;
-
-                if (windowEnd.equals(nextDay)) {
-                    hourlyEnd = day.atTime(23, 59);
-                }
-
-                if (windowStart.isBefore(hourlyEnd)) {
-                    results.addAll(
-                        hourly.findFreeTime(
-                            events,
-                            windowStart,
-                            hourlyEnd,
-                            duration
-                        )
-                    );
-                }
+                results.addAll(hourly.findFreeTime(
+                    events, windowStart, windowEnd, duration)
+            );
             }
 
             day = day.plusDays(1);

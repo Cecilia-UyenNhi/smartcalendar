@@ -17,7 +17,8 @@ public class HourlyFreeTime implements FreeTimeStrategy {
     ) {
         if (start == null || end == null
                 || !start.isBefore(end)
-                || !start.toLocalDate().equals(end.toLocalDate())
+                || !(start.toLocalDate().equals(end.toLocalDate())
+                || end.equals(start.toLocalDate().plusDays(1).atStartOfDay()))
                 || !Double.isFinite(duration)
                 || duration <= 0) {
             throw new IllegalArgumentException(

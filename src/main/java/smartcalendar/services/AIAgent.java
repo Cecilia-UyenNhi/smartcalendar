@@ -225,6 +225,7 @@ String prompt = """
     - assign or change a keyword-based category color
     - remove a keyword-based category color rule
     - query, search, list, or count existing calendar events
+    - find available free time between scheduled events
     - have a normal conversation
 
     For calendar actions, return ONLY a valid JSON object
@@ -334,6 +335,31 @@ For edit requests:
     - Do not invent calendar events or answer from general knowledge.
     - Do not interpret requests to edit or remove events as queries.
 
+    For requests to find available time, return ONLY:
+    {
+      "action": "find_free_time",
+      "startDate": "YYYY-MM-DD",
+      "endDate": "YYYY-MM-DD",
+      "afterTime": "HH:mm",
+      "beforeTime": "HH:mm",
+      "durationMinutes": 120
+    }
+
+    Free-time rules:
+    - Use find_free_time when the user asks when they are free,
+      asks for an open slot, or wants time for an activity.
+    - Use the user's requested minimum duration in minutes.
+      Convert hours to minutes (e.g. 1.5 hours = 90).
+    - If no duration is given, use null; do not invent one.
+    - Resolve relative dates using today's date above.
+    - For a single day, use the same startDate and endDate.
+    - If no date is specified, use today's date for both dates.
+    - If no time bounds are specified, use 00:00 and 23:59.
+    - afterTime applies to the first day; beforeTime applies to
+      the last day. Use 24-hour HH:mm notation.
+    - Never invent free slots: the application calculates them.
+    - Do not use query for free-time requests.
+
     For normal conversation, respond with a valid JSON object:
 
     {
@@ -356,6 +382,9 @@ JsonObject result = JsonParser.parseString(response)
 String action = result.get("action").getAsString();
 
 System.out.println("Detected action: " + action);
+if ("find_free_time".equalsIgnoreCase(action)) {
+    return handleFindFreeTime(result);
+}
 if ("query".equalsIgnoreCase(action)) {
     return handleQuery(result);
 }
@@ -660,6 +689,73 @@ if ("chat".equalsIgnoreCase(action)) {
 }
 return response;
     }
+    // Find available intervals using the existing Strategy pattern.
+    private String handleFindFreeTime(JsonObject request) {
+        try {
+            String durationText = getOptionalJsonString(request, "durationMinutes");
+            if (durationText == null) {
+                return "How much free time do you need? For example, 30 minutes or 2 hours.";
+            }
+
+            double minutes = Double.parseDouble(durationText);
+            if (!Double.isFinite(minutes) || minutes < 1) {
+                return "Please provide a duration of at least one minute.";
+            }
+
+            String startText = getOptionalJsonString(request, "startDate");
+            String endText = getOptionalJsonString(request, "endDate");
+            String afterText = getOptionalJsonString(request, "afterTime");
+            String beforeText = getOptionalJsonString(request, "beforeTime");
+
+            LocalDate firstDay = startText == null
+                ? LocalDate.now() : LocalDate.parse(startText);
+            LocalDate lastDay = endText == null
+                ? firstDay : LocalDate.parse(endText);
+
+            LocalTime fromTime = afterText == null
+                ? LocalTime.MIDNIGHT : LocalTime.parse(afterText);
+            LocalTime toTime = beforeText == null
+                ? LocalTime.of(23, 59) : LocalTime.parse(beforeText);
+
+            LocalDateTime start = firstDay.atTime(fromTime);
+            LocalDateTime end = lastDay.atTime(toTime);
+
+            if (!start.isBefore(end)) {
+                return "The search end must be after the search start.";
+            }
+
+            List<String> slots = facade.findFreeTime(start, end, minutes / 60.0);
+            if (slots.isEmpty()) {
+                return "I couldn't find an available interval of at least "
+                    + formatDuration(minutes) + " in that time range.";
+            }
+
+            StringBuilder answer = new StringBuilder(
+                "I found " + slots.size() + " available interval(s) "
+                + "lasting at least " + formatDuration(minutes) + ":\n\n"
+            );
+            for (int i = 0; i < slots.size(); i++) {
+                answer.append(i + 1).append(". ").append(slots.get(i));
+                if (i < slots.size() - 1) answer.append("\n");
+            }
+            return answer.toString();
+        } catch (IllegalArgumentException e) {
+            return "I couldn't understand the free-time request: " + e.getMessage();
+        } catch (Exception e) {
+            System.err.println("Find free time failed: " + e.getMessage());
+            return "I couldn't check your free time right now.";
+        }
+    }
+
+    private String formatDuration(double minutes) {
+        if (minutes == Math.rint(minutes)) {
+            long total = (long) minutes;
+            if (total % 60 == 0) return (total / 60) + " hour(s)";
+            return total + " minute(s)";
+        }
+        return minutes + " minutes";
+    }
+
     // Retrieve matching events from SQLite through CalendarFacade.
     private String handleQuery(JsonObject query) {
         try {

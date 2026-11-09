@@ -237,6 +237,14 @@ public class SmartCalendarUI {
         calendarScroll.setFitToWidth(true);
         calendarScroll.setFitToHeight(true);
 
+        // Stretch the calendar grid to the full visible height.
+        // The existing ScrollPane still handles smaller windows.
+        monthGrid.prefHeightProperty().bind(
+            calendarScroll.viewportBoundsProperty().map(
+                bounds -> bounds.getHeight()
+            )
+        );
+
         calendarScroll.setHbarPolicy(
             ScrollPane.ScrollBarPolicy.NEVER
         );
@@ -355,31 +363,28 @@ public class SmartCalendarUI {
             refresh();
         });
 
-        Region weekSpacer = new Region();
-
-        HBox.setHgrow(
-            weekSpacer,
-            Priority.ALWAYS
+        // Same buttons and date label, arranged on two lines
+        // to fit the new narrower weekly panel.
+        weekRangeLabel.setWrapText(true);
+        weekRangeLabel.setMinWidth(0);
+        HBox weekNavigation = new HBox(
+            5, weekPrev, weekRangeLabel, weekNext
         );
+        weekNavigation.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(weekRangeLabel, Priority.ALWAYS);
 
-        HBox weeklyHeader = new HBox(
-            8,
-            weeklyTitle,
-            weekSpacer,
-            weekPrev,
-            weekRangeLabel,
-            weekNext
+        VBox compactWeeklyHeader = new VBox(
+            5, weeklyTitle, weekNavigation
         );
-
-        weeklyHeader.setAlignment(Pos.CENTER_LEFT);
 
         VBox weeklyCard = new VBox(
-            8, weeklyHeader, weeklyList
+            8, compactWeeklyHeader, weeklyList
         );
 
         weeklyCard.setPadding(new Insets(10));
-        weeklyCard.setPrefHeight(260);
-        weeklyCard.setMinHeight(260);
+        weeklyCard.setMinWidth(0);
+        weeklyCard.setMinHeight(0);
+        weeklyCard.setMaxWidth(Double.MAX_VALUE);
 
         weeklyCard.setStyle(
             "-fx-background-color: white;" +
@@ -392,14 +397,13 @@ public class SmartCalendarUI {
         );
 
         // ======================================
-        // 4. LEFT PANEL - 70%
+        // 4. LEFT PANEL - MONTHLY CALENDAR
         // ======================================
 
         VBox left = new VBox(
             10,
             toolbar,
-            calendarCard,
-            weeklyCard
+            calendarCard
         );
 
         left.setPadding(new Insets(12));
@@ -410,10 +414,8 @@ public class SmartCalendarUI {
             BACKGROUND + ";"
         );
 
-        VBox.setVgrow(
-            calendarCard,
-            Priority.ALWAYS
-        );
+        calendarCard.setMinHeight(0);
+        VBox.setVgrow(calendarCard, Priority.ALWAYS);
 
         // ======================================
         // 5. SISSY CHAT
@@ -856,42 +858,80 @@ importThread.start();
         );
 
         // ======================================
-        // 7. EVENT EDITOR BELOW SISSY
+        // 7. BOTTOM RIGHT: WEEKLY + EDITOR
         // ======================================
 
         buildEditorCard();
+        editorCard.setMaxWidth(Double.MAX_VALUE);
+
+        // Scroll the existing form rather than removing fields.
+        ScrollPane editorScroll = new ScrollPane(editorCard);
+        editorScroll.setFitToWidth(true);
+        editorScroll.setHbarPolicy(
+            ScrollPane.ScrollBarPolicy.NEVER
+        );
+        editorScroll.setMinWidth(0);
+        editorScroll.setMinHeight(0);
+        editorScroll.setStyle(
+            "-fx-background-color: white;" +
+            "-fx-background: white;" +
+            "-fx-border-color: transparent;"
+        );
+
+        HBox bottomRight = new HBox(
+            10, weeklyCard, editorScroll
+        );
+        bottomRight.setMinHeight(0);
+        bottomRight.setMinWidth(0);
+        bottomRight.setMaxWidth(Double.MAX_VALUE);
+
+        weeklyCard.prefWidthProperty().bind(
+            bottomRight.widthProperty().subtract(10).multiply(0.5)
+        );
+        editorScroll.prefWidthProperty().bind(
+            bottomRight.widthProperty().subtract(10).multiply(0.5)
+        );
+        HBox.setHgrow(weeklyCard, Priority.ALWAYS);
+        HBox.setHgrow(editorScroll, Priority.ALWAYS);
+
+        // ======================================
+        // 8. RIGHT PANEL: 60% CHAT / 40% BOTTOM
+        // ======================================
 
         VBox right = new VBox(
-            10,
-            chatCard,
-            editorCard
+            10, chatCard, bottomRight
         );
 
         right.setPadding(new Insets(12));
         right.setMinWidth(0);
-
         right.setStyle(
             "-fx-background-color: " +
             BACKGROUND + ";"
         );
 
-        editorCard.setMaxWidth(Double.MAX_VALUE);
+        // Account for 24px padding and 10px spacing.
+        chatCard.prefHeightProperty().bind(
+            right.heightProperty().subtract(34).multiply(0.60)
+        );
+        bottomRight.prefHeightProperty().bind(
+            right.heightProperty().subtract(34).multiply(0.40)
+        );
+        VBox.setVgrow(chatCard, Priority.NEVER);
+        VBox.setVgrow(bottomRight, Priority.NEVER);
 
         // ======================================
-        // 8. 70% / 30% LAYOUT
+        // 9. MAIN LAYOUT: 60% LEFT / 40% RIGHT
         // ======================================
 
         HBox layout = new HBox(left, right);
-
         layout.setSpacing(0);
         layout.setFillHeight(true);
 
         left.prefWidthProperty().bind(
-            layout.widthProperty().multiply(0.70)
+            layout.widthProperty().multiply(0.60)
         );
-
         right.prefWidthProperty().bind(
-            layout.widthProperty().multiply(0.30)
+            layout.widthProperty().multiply(0.40)
         );
 
         root.setCenter(layout);
@@ -1012,7 +1052,27 @@ importThread.start();
 
         monthGrid.getChildren().clear();
         monthGrid.getColumnConstraints().clear();
+        monthGrid.getRowConstraints().clear();
         monthEventLabels.clear();
+
+        // Use the available calendar height, rather than leaving
+        // unused white space beneath the final week.
+        int firstDayOffset = shown.atDay(1)
+            .getDayOfWeek().getValue() - 1;
+        int numberOfWeeks =
+            (firstDayOffset + shown.lengthOfMonth() + 6) / 7;
+
+        RowConstraints headerRow = new RowConstraints();
+        headerRow.setPercentHeight(6);
+        monthGrid.getRowConstraints().add(headerRow);
+
+        for (int i = 0; i < numberOfWeeks; i++) {
+            RowConstraints weekRow = new RowConstraints();
+            weekRow.setPercentHeight(94.0 / numberOfWeeks);
+            weekRow.setVgrow(Priority.ALWAYS);
+            weekRow.setFillHeight(true);
+            monthGrid.getRowConstraints().add(weekRow);
+        }
 
         for (int c = 0; c < 7; c++) {
 
@@ -1062,8 +1122,11 @@ importThread.start();
 
             cell.setPadding(new Insets(6));
             cell.setMinHeight(85);
+            cell.setMaxHeight(Double.MAX_VALUE);
             cell.setMinWidth(0);
             cell.setMaxWidth(Double.MAX_VALUE);
+            GridPane.setVgrow(cell, Priority.ALWAYS);
+            GridPane.setFillHeight(cell, true);
 
             String background =
                 day.equals(selected)
