@@ -110,7 +110,25 @@ public String analyzeDocument(String extractedText) {
     JsonArray parts = new JsonArray();
     parts.add(textPart);
 
+    try {
     return sendRequest(parts, DOCUMENT_MODEL);
+
+} catch (RuntimeException e) {
+
+    // Only switch models when the primary model is overloaded
+    if (e.getMessage() != null
+            && e.getMessage().contains("HTTP 503")) {
+
+        System.out.println(
+            "Document model unavailable. Switching to fast model..."
+        );
+
+        return sendRequest(parts, FAST_MODEL);
+    }
+
+    // Other errors should not trigger fallback
+    throw e;
+}
 }
 
     // Analyze PNG or JPEG images using Gemini
@@ -129,13 +147,19 @@ public String analyzeDocument(String extractedText) {
         }
 
         return analyzeFile(
-            image,
-            "Extract all visible course names, calendar events, "
-            + "assignment deadlines, tests, exams, dates, "
-            + "times, and locations from this image. "
-            + "Preserve the original information accurately. "
-            + "Do not invent missing information."
-        );
+    image,
+    "Extract calendar events and academic deadlines from this image. "
+    + "Return ONLY a valid JSON object with an 'events' array. "
+    + "Each event must contain: title, date, startTime, endTime, "
+    + "dueTime, location, and type. "
+    + "Use YYYY-MM-DD for dates and HH:mm (24-hour) for times. "
+    + "Use type 'deadline' for assignments and submission deadlines, "
+    + "and type 'event' for classes, tests, exams, and meetings. "
+    + "For deadlines without an explicitly stated time, set dueTime to null. "
+    + "Use null for missing information. "
+    + "Do not invent dates, times, or events. "
+    + "Do not include Markdown formatting or code fences."
+);
     }
 
     // Convert image into a Gemini API request
@@ -189,7 +213,23 @@ public String analyzeDocument(String extractedText) {
             parts.add(textPart);
             parts.add(imagePart);
 
-            return sendRequest(parts, DOCUMENT_MODEL);
+            try {
+    return sendRequest(parts, DOCUMENT_MODEL);
+
+} catch (RuntimeException e) {
+
+    if (e.getMessage() != null
+            && e.getMessage().contains("HTTP 503")) {
+
+        System.out.println(
+            "Image model unavailable. Switching to fast model..."
+        );
+
+        return sendRequest(parts, FAST_MODEL);
+    }
+
+    throw e;
+}
 
         } catch (IOException e) {
             throw new RuntimeException(

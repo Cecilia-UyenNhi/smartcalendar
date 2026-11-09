@@ -634,17 +634,170 @@ importTask.setOnSucceeded(event -> {
     messages.getChildren().remove(waitingBubble);
 
     List<Event> importedEvents = importTask.getValue();
-
+    if (importedEvents.isEmpty()) {
     messages.getChildren().add(
         new ChatBubble(
-            "Import complete! Added "
-            + importedEvents.size()
-            + " event(s) to your calendar.",
+            "No new events were found in this file.",
             false
         )
     );
+    return;
+}
+// Create selectable checkboxes for imported events
+VBox eventChecklist = new VBox(8);
+List<CheckBox> eventCheckboxes = new ArrayList<>();
 
-    refresh();
+for (Event ev : importedEvents) {
+
+    CheckBox checkbox = new CheckBox(
+        ev.getTitle() + "\n"
+        + ev.getDate() + " | "
+        + ev.getStartTime() + " - "
+        + ev.getEndTime()
+    );
+
+    checkbox.setSelected(true);
+    checkbox.setWrapText(true);
+    checkbox.setMaxWidth(Double.MAX_VALUE);
+
+    eventCheckboxes.add(checkbox);
+    eventChecklist.getChildren().add(checkbox);
+}
+// Display the import preview inside Sissy's chat
+Label previewTitle = new Label(
+    "Sissy found " + importedEvents.size()
+    + " event(s). Select the ones you want to import:"
+);
+
+previewTitle.setWrapText(true);
+previewTitle.setStyle(
+    "-fx-font-weight: bold;" +
+    "-fx-text-fill: #315D85;"
+);
+
+// Make the event list scrollable
+ScrollPane checklistScroll = new ScrollPane(eventChecklist);
+checklistScroll.setFitToWidth(true);
+checklistScroll.setPrefHeight(250);
+checklistScroll.setHbarPolicy(
+    ScrollPane.ScrollBarPolicy.NEVER
+);
+
+// Container for the preview
+VBox importPreview = new VBox(
+    10, previewTitle, checklistScroll
+);
+
+importPreview.setPadding(new Insets(12));
+importPreview.setMaxWidth(Double.MAX_VALUE);
+importPreview.setStyle(
+    "-fx-background-color: #F2F7FD;" +
+    "-fx-background-radius: 10;" +
+    "-fx-border-color: #C6E0FA;" +
+    "-fx-border-radius: 10;"
+);
+// Buttons for selective import
+Button importSelectedButton = new Button("Import Selected");
+Button cancelImportButton = new Button("Cancel");
+
+styleButton(importSelectedButton);
+styleButton(cancelImportButton);
+
+// Count how many events are selected
+Runnable updateSelectionCount = () -> {
+    long count = eventCheckboxes.stream()
+        .filter(CheckBox::isSelected)
+        .count();
+
+    importSelectedButton.setText(
+        "Import Selected (" + count + ")"
+    );
+
+    importSelectedButton.setDisable(count == 0);
+};
+
+// Update the button whenever a checkbox changes
+for (CheckBox checkbox : eventCheckboxes) {
+    checkbox.selectedProperty().addListener(
+        (obs, oldValue, newValue) ->
+            updateSelectionCount.run()
+    );
+}
+
+updateSelectionCount.run();
+
+// Place both buttons below the checklist
+HBox importActions = new HBox(
+    8, importSelectedButton, cancelImportButton
+);
+
+importActions.setAlignment(Pos.CENTER_RIGHT);
+
+importPreview.getChildren().add(importActions);
+importSelectedButton.setOnAction(clickEvent  -> {
+
+    List<Event> selectedEvents = new ArrayList<>();
+
+    for (int i = 0; i < importedEvents.size(); i++) {
+        if (eventCheckboxes.get(i).isSelected()) {
+            selectedEvents.add(importedEvents.get(i));
+        }
+    }
+
+    if (selectedEvents.isEmpty()) {
+        return;
+    }
+
+    try {
+        List<Event> savedEvents =
+            importService.saveImportedEvents(selectedEvents);
+
+        messages.getChildren().add(
+            new ChatBubble(
+                "Import complete! Added "
+                + savedEvents.size()
+                + " selected event(s) to your calendar.",
+                false
+            )
+        );
+
+        // Prevent importing the same selection twice
+        importSelectedButton.setDisable(true);
+        cancelImportButton.setDisable(true);
+        eventChecklist.setDisable(true);
+
+        refresh();
+        chatHistory.setVvalue(1.0);
+
+    } catch (Exception ex) {
+        ex.printStackTrace();
+
+        messages.getChildren().add(
+            new ChatBubble(
+                "Could not save selected events: "
+                + ex.getMessage(),
+                false
+            )
+        );
+    }
+});
+
+cancelImportButton.setOnAction(clickEvent -> {
+
+    // Disable the preview without saving anything
+    importSelectedButton.setDisable(true);
+    cancelImportButton.setDisable(true);
+    eventChecklist.setDisable(true);
+
+    messages.getChildren().add(
+        new ChatBubble("Schedule import cancelled.", false)
+    );
+
+    chatHistory.setVvalue(1.0);
+});
+// Add the preview to Sissy's chat
+messages.getChildren().add(importPreview);
+chatHistory.setVvalue(1.0);
 });
 
 // Import failed

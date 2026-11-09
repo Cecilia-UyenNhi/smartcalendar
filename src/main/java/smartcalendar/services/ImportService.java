@@ -1,6 +1,7 @@
 
 package smartcalendar.services;
 
+import smartcalendar.commands.AddEvent;
 import smartcalendar.database.EventRepo;
 import smartcalendar.models.Event;
 
@@ -98,32 +99,50 @@ if (filename.endsWith(".pdf")) {
         // Next step: convert extracted text into events.
         List<Event> events = parseEvents(extractedInfo);
 
-        List<Event> importedEvents = new java.util.ArrayList<>();
+        // Prepare events for preview without saving them
+List<Event> previewEvents = new java.util.ArrayList<>();
 
 for (Event event : events) {
 
     // Skip events already stored in the calendar
     if (conflictService.isDuplicate(event)) {
         System.out.println(
-            "Skipping duplicate event: " + event.getTitle()
+            "Skipping existing event: " + event.getTitle()
         );
         continue;
     }
 
-    // Save the new event to SQLite
-    repo.save(event);
-    importedEvents.add(event);
+    // Keep the event in memory only
+    previewEvents.add(event);
 }
 
-// Notify observers only when new events were imported
-if (!importedEvents.isEmpty()) {
-    javafx.application.Platform.runLater(
-        () -> calendarService.updateViews()
-    );
-} 
-
-return importedEvents;
+return previewEvents;
     }
+    public List<Event> saveImportedEvents(List<Event> events) {
+
+    Objects.requireNonNull(events, "Events are required");
+
+    List<Event> savedEvents = new java.util.ArrayList<>();
+
+    for (Event event : events) {
+
+        // Check again in case the event was added
+        // while the user was reviewing the preview
+        if (conflictService.isDuplicate(event)) {
+            System.out.println(
+                "Skipping duplicate: " + event.getTitle()
+            );
+            continue;
+        }
+
+        // Save using the existing Command pattern
+        new AddEvent(event, repo, calendarService).execute();
+
+        savedEvents.add(event);
+    }
+
+    return savedEvents;
+}
 
     // ========================================
     // EXTRACT PDF TEXT
