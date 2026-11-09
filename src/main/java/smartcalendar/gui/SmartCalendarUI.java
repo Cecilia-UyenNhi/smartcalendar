@@ -465,6 +465,10 @@ public class SmartCalendarUI {
 
         ScrollPane chatHistory =
             new ScrollPane(messages);
+        messages.heightProperty().addListener(
+        (obs, oldHeight, newHeight) ->
+        chatHistory.setVvalue(1.0)
+        );
 
         chatHistory.setFitToWidth(true);
 
@@ -504,61 +508,78 @@ public class SmartCalendarUI {
 
         inputBar.setAlignment(Pos.CENTER);
 
-        // Temporary chat until Gemini is ready.
+        // Send user messages to Sissy through AIAgent.
         send.setOnAction(e -> {
+            String message = chatInput.getText().trim();
 
-            String request =
-                chatInput.getText().trim();
-
-            if (request.isEmpty()) {
-                return;
-            }
-
-            // User: right bubble.
-            messages.getChildren().add(
-                new ChatBubble(request, true)
-            );
-
-            // Sissy: left bubble.
-            // Sissy: generate response using Gemini.
-String message = chatInput.getText().trim();
-
-if (message.isEmpty()) {
-    return;
-}
-Task<String> aiTask = new Task<>() {
-
-    @Override
-    protected String call() {
-        return aiAgent.handleRequest(message);
+    if (message.isEmpty()) {
+        return;
     }
-};
-chatInput.clear();
 
-aiTask.setOnSucceeded(event -> {
+    // Display user's message
     messages.getChildren().add(
-        new ChatBubble(aiTask.getValue(), false)
+        new ChatBubble(message, true)
     );
-});
 
-aiTask.setOnFailed(event -> {
-    messages.getChildren().add(
-        new ChatBubble(
-            "Sorry, I couldn't process your message.",
-            false
-        )
-    );
-});
+    chatInput.clear();
 
-Thread aiThread = new Thread(aiTask);
-aiThread.setDaemon(true);
-aiThread.start();
+    // Show a temporary response while Gemini processes
+    ChatBubble waitingBubble =
+        new ChatBubble("Sissy is thinking...", false);
 
-            chatInput.clear();
+    messages.getChildren().add(waitingBubble);
 
-            Platform.runLater(
-                () -> chatHistory.setVvalue(1.0)
-            );
+    chatHistory.setVvalue(1.0);
+
+    // Call Gemini on a background thread
+    Task<String> aiTask = new Task<>() {
+
+        @Override
+        protected String call() {
+            return aiAgent.handleRequest(message);
+        }
+    };
+
+    // Gemini responded successfully
+    aiTask.setOnSucceeded(event -> {
+
+        messages.getChildren().remove(waitingBubble);
+
+        String response = aiTask.getValue();
+
+        messages.getChildren().add(
+            new ChatBubble(response, false)
+        );
+
+        chatHistory.setVvalue(1.0);
+    });
+
+    // Unexpected error
+    aiTask.setOnFailed(event -> {
+
+        messages.getChildren().remove(waitingBubble);
+
+        Throwable error = aiTask.getException();
+
+        if (error != null) {
+            error.printStackTrace();
+        }
+
+        messages.getChildren().add(
+            new ChatBubble(
+                "Sorry, something went wrong. "
+                + "Please check the terminal for details.",
+                false
+            )
+        );
+
+        chatHistory.setVvalue(1.0);
+    });
+
+    Thread aiThread = new Thread(aiTask, "sissy-ai");
+
+    aiThread.setDaemon(true);
+    aiThread.start();
         });
 
         chatInput.setOnAction(

@@ -19,7 +19,7 @@ import java.util.Locale;
 public class LLM {
 
     // Gemini model
-    private final String modelID = "gemini-3.8-flash";
+    private final String modelID = "gemini-3.5-flash";
 
     private final String apiKey;
     private final HttpClient client;
