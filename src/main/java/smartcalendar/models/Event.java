@@ -13,6 +13,27 @@ public class Event {
         this.endTime = LocalTime.parse(Objects.requireNonNull(endTime));
         validateTimes(); this.location=location; this.catColor=color;
     }
+    public static Event createDeadline(
+        String title,
+        String date,
+        String dueTime
+    ) {
+    // Default to 11:59 PM when no due time is provided
+    String time = (dueTime == null || dueTime.isBlank())
+            ? "23:59"
+            : dueTime;
+
+    // Represent the deadline as a one-minute calendar event
+    LocalTime end = LocalTime.parse(time);
+    LocalTime start = end.minusMinutes(1);
+
+    return new Event(
+        title,
+        date,
+        start.toString(),
+        end.toString()
+    );
+}
     private void validateTimes() { if (!startTime.isBefore(endTime)) throw new IllegalArgumentException("Start time must be before end time."); }
     public String getTitle(){return title;} public String getDate(){return date.toString();}
     public String getStartTime(){return startTime.toString();} public String getEndTime(){return endTime.toString();}

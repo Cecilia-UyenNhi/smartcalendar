@@ -85,6 +85,29 @@ public class ConflictService {
         return !checkConflict(event).isEmpty();
     }
 
+    public boolean isDuplicate(Event proposed) {
+
+    if (proposed == null) {
+        throw new IllegalArgumentException(
+            "Proposed event cannot be null."
+        );
+    }
+
+    for (Event existing : repo.findByDate(proposed.getDate())) {
+
+        if (existing.getTitle().equalsIgnoreCase(proposed.getTitle())
+                && existing.getStartTime().equals(proposed.getStartTime())
+                && existing.getEndTime().equals(proposed.getEndTime())
+                && java.util.Objects.equals(
+                    existing.getLocation(),
+                    proposed.getLocation()
+                )) {
+            return true;
+        }
+    }
+
+    return false;
+    }
     // Compare the stored identifying fields.
     private boolean sameEvent(Event a, Event b) {
 

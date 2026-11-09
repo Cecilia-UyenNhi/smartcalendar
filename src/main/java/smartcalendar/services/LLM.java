@@ -18,8 +18,11 @@ import java.util.Locale;
 
 public class LLM {
 
-    // Gemini model
-    private final String modelID = "gemini-3.5-flash";
+    // Fast model for chat and calendar commands
+    private static final String FAST_MODEL = "gemini-3.5-flash-lite";
+
+    // Advanced model for PDF and image extraction
+    private static final String DOCUMENT_MODEL = "gemini-3.8-flash";
 
     private final String apiKey;
     private final HttpClient client;
@@ -58,7 +61,7 @@ public class LLM {
         parts.add(textPart);
 
         try {
-            return sendRequest(parts);
+            return sendRequest(parts, FAST_MODEL);
 
         } catch (RuntimeException e) {
 
@@ -70,6 +73,45 @@ public class LLM {
                  + "Please check your API key and internet connection.";
         }
     }
+    // Analyze extracted PDF text using the document model
+public String analyzeDocument(String extractedText) {
+
+    if (extractedText == null || extractedText.isBlank()) {
+        throw new IllegalArgumentException(
+            "Document text cannot be empty."
+        );
+    }
+
+    if (!isConfigured()) {
+        throw new IllegalStateException(
+            "Gemini API key is required for document analysis."
+        );
+    }
+
+    JsonObject textPart = new JsonObject();
+
+    textPart.addProperty(
+    "text",
+    "Extract calendar events and academic deadlines from this document. "
+    + "Return ONLY a valid JSON object with an 'events' array. "
+    + "Each event must contain: title, date, startTime, endTime, "
+    + "dueTime, location, and type. "
+    + "Use YYYY-MM-DD for dates and HH:mm (24-hour) for times. "
+    + "Use type 'deadline' for assignments and submission deadlines, "
+    + "and type 'event' for classes, tests, exams, and meetings. "
+    + "For deadlines without an explicitly stated time, set dueTime to null. "
+    + "For regular events, preserve startTime and endTime when provided. "
+    + "Use null for missing information. "
+    + "Do not invent dates, times, or events. "
+    + "Do not include Markdown formatting or code fences.\n\n"
+    + extractedText
+    );
+
+    JsonArray parts = new JsonArray();
+    parts.add(textPart);
+
+    return sendRequest(parts, DOCUMENT_MODEL);
+}
 
     // Analyze PNG or JPEG images using Gemini
     public String analyzeImage(File image) {
@@ -147,7 +189,7 @@ public class LLM {
             parts.add(textPart);
             parts.add(imagePart);
 
-            return sendRequest(parts);
+            return sendRequest(parts, DOCUMENT_MODEL);
 
         } catch (IOException e) {
             throw new RuntimeException(
@@ -157,7 +199,7 @@ public class LLM {
     }
 
     // Send a request to the Gemini REST API
-    private String sendRequest(JsonArray parts) {
+    private String sendRequest(JsonArray parts, String modelID) {
 
         if (!isConfigured()) {
             throw new IllegalStateException(
