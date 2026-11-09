@@ -5,15 +5,20 @@ import smartcalendar.database.EventRepo;
 import smartcalendar.models.Event;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
+
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
 
 public class ImportService {
 
     private final EventRepo repo;
     private final CalendarService calendarService;
-
-    // Gemini / LLMService will be added later.
+    private final LLM llm;
 
     public ImportService(
         EventRepo repo,
@@ -22,6 +27,8 @@ public class ImportService {
         this.repo = Objects.requireNonNull(repo);
         this.calendarService =
             Objects.requireNonNull(calendarService);
+
+        this.llm = new LLM();
     }
 
     // ========================================
@@ -38,15 +45,41 @@ public class ImportService {
             );
         }
 
-        // TODO: Extract information from PDF or image.
-        // TODO: Send extracted information to Gemini.
-        // TODO: Convert Gemini output into Event objects.
-        // TODO: Save events using EventRepo.
-        // TODO: Notify observers using CalendarService.
+        String filename =
+            file.getName().toLowerCase(Locale.ROOT);
 
-        throw new UnsupportedOperationException(
-            "AI schedule importing is not implemented yet."
-        );
+        String extractedInfo;
+
+        // PDF: extract locally using PDFBox
+        if (filename.endsWith(".pdf")) {
+            extractedInfo = extractPDF(file);
+
+        // PNG/JPEG: extract using Gemini
+        } else if (filename.endsWith(".png")
+                || filename.endsWith(".jpg")
+                || filename.endsWith(".jpeg")) {
+
+            extractedInfo = extractImage(file);
+
+        } else {
+            throw new IllegalArgumentException(
+                "Unsupported file type. "
+                + "Please select PDF, PNG, or JPEG."
+            );
+        }
+
+        if (extractedInfo.isBlank()) {
+            throw new IllegalArgumentException(
+                "No schedule information was extracted."
+            );
+        }
+
+        // Next step: convert extracted text into events.
+        List<Event> events = parseEvents(extractedInfo);
+
+        // Saving and observer updates will be added
+        // after event parsing is implemented.
+        return events;
     }
 
     // ========================================
@@ -55,11 +88,29 @@ public class ImportService {
 
     public String extractPDF(File file) {
 
-        // TODO: Implement PDF text extraction later.
+        Objects.requireNonNull(file, "PDF file required");
 
-        throw new UnsupportedOperationException(
-            "PDF extraction is not implemented yet."
-        );
+        if (!file.isFile()) {
+            throw new IllegalArgumentException(
+                "The selected PDF does not exist."
+            );
+        }
+
+        try (PDDocument document = Loader.loadPDF(file)) {
+
+            PDFTextStripper stripper =
+                new PDFTextStripper();
+
+            String extractedText =
+                stripper.getText(document);
+
+            return extractedText;
+
+        } catch (IOException e) {
+            throw new RuntimeException(
+                "Failed to extract text from PDF.", e
+            );
+        }
     }
 
     // ========================================
@@ -68,11 +119,22 @@ public class ImportService {
 
     public String extractImage(File file) {
 
-        // TODO: Integrate Gemini image understanding later.
+        Objects.requireNonNull(file, "Image file required");
 
-        throw new UnsupportedOperationException(
-            "Image extraction is not implemented yet."
-        );
+        if (!file.isFile()) {
+            throw new IllegalArgumentException(
+                "The selected image does not exist."
+            );
+        }
+
+        if (!llm.isConfigured()) {
+            throw new IllegalStateException(
+                "Gemini API key is required "
+                + "to extract information from images."
+            );
+        }
+
+        return llm.analyzeImage(file);
     }
 
     // ========================================
@@ -81,8 +143,16 @@ public class ImportService {
 
     public List<Event> parseEvents(String extractedInfo) {
 
-        // TODO: Convert extracted information
-        // into Event objects.
+        if (extractedInfo == null
+                || extractedInfo.isBlank()) {
+            return List.of();
+        }
+
+        // TODO:
+        // 1. Send extracted text to Gemini.
+        // 2. Ask Gemini to return structured JSON.
+        // 3. Convert JSON into Event objects.
+        // 4. Validate dates, times, and required fields.
 
         throw new UnsupportedOperationException(
             "Event parsing is not implemented yet."
