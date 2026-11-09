@@ -10,5 +10,21 @@ public class CalendarService {
     public List<Event> getEvents(){return repo.findAll();}
     public void addObserver(CalendarObserver observer){Objects.requireNonNull(observer);if(!observers.contains(observer))observers.add(observer);}
     public void removeObserver(CalendarObserver observer){observers.remove(observer);}
-    public void updateViews(){List<Event> events=getEvents();for(CalendarObserver observer:List.copyOf(observers))observer.display(events);}
+    public void updateViews() {
+
+    Runnable notifyObservers = () -> {
+
+        List<Event> events = getEvents();
+
+        for (CalendarObserver observer : List.copyOf(observers)) {
+            observer.display(events);
+        }
+    };
+
+    if (javafx.application.Platform.isFxApplicationThread()) {
+        notifyObservers.run();
+    } else {
+        javafx.application.Platform.runLater(notifyObservers);
+    }
+    }
 }

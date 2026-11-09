@@ -1,9 +1,13 @@
 
 package smartcalendar.gui;
 
+import javafx.stage.FileChooser;
+import java.io.File;
+
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.concurrent.Task;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
@@ -14,7 +18,8 @@ import smartcalendar.observers.WeeklySchedView;
 import smartcalendar.services.CalendarFacade;
 import smartcalendar.services.CalendarService;
 import smartcalendar.services.AIAgent;
-import javafx.concurrent.Task;
+import smartcalendar.services.ImportService;
+
 
 import java.time.*;
 import java.time.format.DateTimeFormatter;
@@ -48,7 +53,8 @@ public class SmartCalendarUI {
     private final EventRepo repo = new EventRepo();
 
     private final CalendarFacade facade;
-
+    private final ImportService importService =
+    new ImportService(repo, service);
     // ==========================================
     // CALENDAR STATE
     // ==========================================
@@ -586,13 +592,87 @@ public class SmartCalendarUI {
             e -> send.fire()
         );
 
-        attach.setOnAction(e ->
-            new Alert(
-                Alert.AlertType.INFORMATION,
-                "Schedule importing will be " +
-                "connected later."
-            ).showAndWait()
-        );
+      attach.setOnAction(e -> {
+
+    FileChooser fileChooser = new FileChooser();
+
+    fileChooser.setTitle("Import Course Schedule");
+
+    fileChooser.getExtensionFilters().add(
+        new FileChooser.ExtensionFilter(
+            "Supported Files (*.pdf, *.png, *.jpg, *.jpeg)",
+            "*.pdf", "*.png", "*.jpg", "*.jpeg"
+        )
+    );
+
+    File selectedFile = fileChooser.showOpenDialog(
+        root.getScene().getWindow()
+    );
+
+    if (selectedFile == null) {
+        return;
+    }
+
+// Show a temporary message in Sissy's chat
+ChatBubble waitingBubble =
+    new ChatBubble("Sissy is importing your file...", false);
+
+messages.getChildren().add(waitingBubble);
+
+// Process the file in the background
+Task<List<Event>> importTask = new Task<>() {
+
+    @Override
+    protected List<Event> call() {
+        return importService.importFile(selectedFile);
+    }
+};
+
+// Import completed
+importTask.setOnSucceeded(event -> {
+
+    messages.getChildren().remove(waitingBubble);
+
+    List<Event> importedEvents = importTask.getValue();
+
+    messages.getChildren().add(
+        new ChatBubble(
+            "Import complete! Added "
+            + importedEvents.size()
+            + " event(s) to your calendar.",
+            false
+        )
+    );
+
+    refresh();
+});
+
+// Import failed
+importTask.setOnFailed(event -> {
+
+    messages.getChildren().remove(waitingBubble);
+
+    Throwable error = importTask.getException();
+
+    if (error != null) {
+        error.printStackTrace();
+    }
+
+    messages.getChildren().add(
+        new ChatBubble(
+            "Sorry, I couldn't import that file. "
+            + (error == null ? "Unknown error." : error.getMessage()),
+            false
+        )
+    );
+});
+
+// Start background processing
+Thread importThread = new Thread(importTask, "sissy-import");
+
+importThread.setDaemon(true);
+importThread.start();
+});
 
         VBox chatCard = new VBox(
             8,

@@ -4,6 +4,7 @@ package smartcalendar.services;
 import smartcalendar.database.EventRepo;
 import smartcalendar.models.Event;
 
+
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -116,8 +117,10 @@ for (Event event : events) {
 
 // Notify observers only when new events were imported
 if (!importedEvents.isEmpty()) {
-    calendarService.updateViews();
-}
+    javafx.application.Platform.runLater(
+        () -> calendarService.updateViews()
+    );
+} 
 
 return importedEvents;
     }

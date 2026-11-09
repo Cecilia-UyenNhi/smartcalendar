@@ -211,6 +211,11 @@ public class CalendarFacade {
     public boolean checkConflict(Event event) {
         return conflictService.hasConflict(event);
     }
+    // Check whether an identical event already exists
+public boolean isDuplicate(Event event) {
+    Objects.requireNonNull(event);
+    return conflictService.isDuplicate(event);
+}
 
     public List<Event> getConflictingEvents(
         Event event
