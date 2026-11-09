@@ -1,7 +1,9 @@
+smartcalendar\services\LLM.class
 smartcalendar\Main.class
 smartcalendar\observers\CalendarView.class
 smartcalendar\strategies\WeeklyFreeTime.class
 smartcalendar\gui\CategoryColors$1.class
+smartcalendar\services\AIAgent.class
 smartcalendar\strategies\HourlyFreeTime.class
 smartcalendar\models\Event.class
 smartcalendar\commands\EditEvent.class
@@ -19,6 +21,7 @@ smartcalendar\database\EventRepo.class
 smartcalendar\services\CategoryService.class
 smartcalendar\database\DataManager.class
 smartcalendar\strategies\FreeTimeStrategy.class
+smartcalendar\gui\SmartCalendarUI$2.class
 smartcalendar\services\CalendarFacade.class
 smartcalendar\services\CalendarService.class
 smartcalendar\services\ImportService.class

@@ -13,6 +13,8 @@ import smartcalendar.observers.CalendarView;
 import smartcalendar.observers.WeeklySchedView;
 import smartcalendar.services.CalendarFacade;
 import smartcalendar.services.CalendarService;
+import smartcalendar.services.AIAgent;
+import javafx.concurrent.Task;
 
 import java.time.*;
 import java.time.format.DateTimeFormatter;
@@ -29,6 +31,7 @@ public class SmartCalendarUI {
     private static final String PRIMARY = "#315D85";
     private static final String LIGHT_BLUE = "#F2F7FD";
     private static final String EVENT_BLUE = "#C6E0FA";
+    private AIAgent aiAgent;
 
     private static final DateTimeFormatter TIME_FORMAT =
         DateTimeFormatter.ofPattern("HH:mm");
@@ -94,6 +97,7 @@ public class SmartCalendarUI {
     public SmartCalendarUI() {
 
         facade = new CalendarFacade(repo, service);
+        aiAgent = new AIAgent(facade);
 
         // ======================================
         // 1. CALENDAR TOOLBAR
@@ -516,13 +520,39 @@ public class SmartCalendarUI {
             );
 
             // Sissy: left bubble.
-            messages.getChildren().add(
-                new ChatBubble(
-                    "Sissy's AI functionality " +
-                    "is coming soon.",
-                    false
-                )
-            );
+            // Sissy: generate response using Gemini.
+String message = chatInput.getText().trim();
+
+if (message.isEmpty()) {
+    return;
+}
+Task<String> aiTask = new Task<>() {
+
+    @Override
+    protected String call() {
+        return aiAgent.handleRequest(message);
+    }
+};
+chatInput.clear();
+
+aiTask.setOnSucceeded(event -> {
+    messages.getChildren().add(
+        new ChatBubble(aiTask.getValue(), false)
+    );
+});
+
+aiTask.setOnFailed(event -> {
+    messages.getChildren().add(
+        new ChatBubble(
+            "Sorry, I couldn't process your message.",
+            false
+        )
+    );
+});
+
+Thread aiThread = new Thread(aiTask);
+aiThread.setDaemon(true);
+aiThread.start();
 
             chatInput.clear();
 
