@@ -1,0 +1,18 @@
+# API keys and local configuration
+.env
+.env.*
+!.env.example
+config.local.json
+
+# Maven build files
+target/
+
+# IDE files
+.idea/
+.vscode/
+
+# Local database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
