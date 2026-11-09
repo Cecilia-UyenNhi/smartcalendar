@@ -5,7 +5,6 @@ import smartcalendar.commands.AddEvent;
 import smartcalendar.database.EventRepo;
 import smartcalendar.models.Event;
 
-
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -26,10 +25,9 @@ public class ImportService {
 
     private final EventRepo repo;
     private final CalendarService calendarService;
-    private final LLM llm; 
+    private final LLM llm;
     private final ConflictService conflictService;
-
-
+    private final CategoryService categoryService;
 
     public ImportService(
         EventRepo repo,
@@ -41,6 +39,7 @@ public class ImportService {
 
         this.llm = new LLM();
         this.conflictService = new ConflictService(repo);
+        this.categoryService = new CategoryService(repo);
     }
 
     // ========================================
@@ -62,21 +61,18 @@ public class ImportService {
 
         String extractedInfo;
 
-        // PDF: extract locally using PDFBox
-        // PDF: extract text with PDFBox, then analyze with Gemini 3.8 Flash
-if (filename.endsWith(".pdf")) {
+        if (filename.endsWith(".pdf")) {
 
-    String pdfText = extractPDF(file);
+            String pdfText = extractPDF(file);
 
-    if (pdfText.isBlank()) {
-        throw new IllegalArgumentException(
-            "No readable text found in the PDF."
-        );
-    }
+            if (pdfText.isBlank()) {
+                throw new IllegalArgumentException(
+                    "No readable text found in the PDF."
+                );
+            }
 
-    extractedInfo = llm.analyzeDocument(pdfText);
+            extractedInfo = llm.analyzeDocument(pdfText);
 
-        // PNG/JPEG: extract using Gemini
         } else if (filename.endsWith(".png")
                 || filename.endsWith(".jpg")
                 || filename.endsWith(".jpeg")) {
@@ -96,53 +92,57 @@ if (filename.endsWith(".pdf")) {
             );
         }
 
-        // Next step: convert extracted text into events.
         List<Event> events = parseEvents(extractedInfo);
 
-        // Prepare events for preview without saving them
-List<Event> previewEvents = new java.util.ArrayList<>();
+        List<Event> previewEvents = new java.util.ArrayList<>();
 
-for (Event event : events) {
+        for (Event event : events) {
 
-    // Skip events already stored in the calendar
-    if (conflictService.isDuplicate(event)) {
-        System.out.println(
-            "Skipping existing event: " + event.getTitle()
-        );
-        continue;
-    }
+            if (conflictService.isDuplicate(event)) {
+                System.out.println(
+                    "Skipping existing event: " + event.getTitle()
+                );
+                continue;
+            }
 
-    // Keep the event in memory only
-    previewEvents.add(event);
-}
-
-return previewEvents;
-    }
-    public List<Event> saveImportedEvents(List<Event> events) {
-
-    Objects.requireNonNull(events, "Events are required");
-
-    List<Event> savedEvents = new java.util.ArrayList<>();
-
-    for (Event event : events) {
-
-        // Check again in case the event was added
-        // while the user was reviewing the preview
-        if (conflictService.isDuplicate(event)) {
-            System.out.println(
-                "Skipping duplicate: " + event.getTitle()
-            );
-            continue;
+            previewEvents.add(event);
         }
 
-        // Save using the existing Command pattern
-        new AddEvent(event, repo, calendarService).execute();
-
-        savedEvents.add(event);
+        return previewEvents;
     }
 
-    return savedEvents;
-}
+    public List<Event> saveImportedEvents(List<Event> events) {
+
+        Objects.requireNonNull(events, "Events are required");
+
+        List<Event> savedEvents = new java.util.ArrayList<>();
+
+        for (Event event : events) {
+
+            if (conflictService.isDuplicate(event)) {
+                System.out.println(
+                    "Skipping duplicate: " + event.getTitle()
+                );
+                continue;
+            }
+
+            String color = categoryService.categorize(event);
+
+            if (color != null) {
+                event.setCatColor(color);
+            }
+
+            new AddEvent(
+                event,
+                repo,
+                calendarService
+            ).execute();
+
+            savedEvents.add(event);
+        }
+
+        return savedEvents;
+    }
 
     // ========================================
     // EXTRACT PDF TEXT
@@ -176,118 +176,117 @@ return previewEvents;
     }
 
     // ========================================
-    // EXTRACT IMAGE TEXT
+    // PARSE EXTRACTED EVENTS
     // ========================================
+
     public List<Event> parseEvents(String extractedInfo) {
 
-    if (extractedInfo == null || extractedInfo.isBlank()) {
-        return List.of();
+        if (extractedInfo == null || extractedInfo.isBlank()) {
+            return List.of();
+        }
+
+        List<Event> events = new java.util.ArrayList<>();
+
+        try {
+            JsonObject root = JsonParser.parseString(extractedInfo)
+                    .getAsJsonObject();
+
+            JsonArray eventArray = root.getAsJsonArray("events");
+
+            if (eventArray == null) {
+                throw new IllegalArgumentException(
+                    "Gemini response is missing the events array."
+                );
+            }
+
+            for (JsonElement element : eventArray) {
+
+                JsonObject obj = element.getAsJsonObject();
+
+                String title = getOptionalString(obj, "title");
+                String date = getOptionalString(obj, "date");
+                String type = getOptionalString(obj, "type");
+                String startTime = getOptionalString(obj, "startTime");
+                String endTime = getOptionalString(obj, "endTime");
+                String dueTime = getOptionalString(obj, "dueTime");
+                String location = getOptionalString(obj, "location");
+
+                if (title == null || date == null) {
+                    continue;
+                }
+
+                try {
+                    Event event;
+
+                    if ("deadline".equalsIgnoreCase(type)) {
+
+                        event = Event.createDeadline(
+                            title, date, dueTime
+                        );
+
+                    } else {
+
+                        if (startTime == null || endTime == null) {
+                            continue;
+                        }
+
+                        event = new Event(
+                            title, date, startTime, endTime
+                        );
+                    }
+
+                    event.setLocation(location);
+                    events.add(event);
+
+                } catch (IllegalArgumentException e) {
+                    System.err.println(
+                        "Skipping invalid event: " + title
+                        + " (" + e.getMessage() + ")"
+                    );
+                }
+            }
+
+            return events;
+
+        } catch (JsonParseException | IllegalStateException e) {
+            throw new IllegalArgumentException(
+                "Failed to parse Gemini's event JSON.", e
+            );
+        }
     }
 
-    List<Event> events = new java.util.ArrayList<>();
+    // ========================================
+    // EXTRACT IMAGE TEXT
+    // ========================================
 
-    try {
-        JsonObject root = JsonParser.parseString(extractedInfo)
-                .getAsJsonObject();
+    public String extractImage(File file) {
 
-        JsonArray eventArray = root.getAsJsonArray("events");
+        Objects.requireNonNull(file, "Image file required");
 
-        if (eventArray == null) {
+        if (!file.isFile()) {
             throw new IllegalArgumentException(
-                "Gemini response is missing the events array."
+                "The selected image does not exist."
             );
         }
 
-        for (JsonElement element : eventArray) {
-
-            JsonObject obj = element.getAsJsonObject();
-
-            String title = getOptionalString(obj, "title");
-            String date = getOptionalString(obj, "date");
-            String type = getOptionalString(obj, "type");
-            String startTime = getOptionalString(obj, "startTime");
-            String endTime = getOptionalString(obj, "endTime");
-            String dueTime = getOptionalString(obj, "dueTime");
-            String location = getOptionalString(obj, "location");
-
-            // Skip entries without a title or date
-            if (title == null || date == null) {
-                continue;
-            }
-
-            try {
-                Event event;
-
-                if ("deadline".equalsIgnoreCase(type)) {
-
-                    // Defaults to 11:59 PM if no time is given
-                    event = Event.createDeadline(
-                        title, date, dueTime
-                    );
-
-                } else {
-
-                    // Regular events need both start and end times
-                    if (startTime == null || endTime == null) {
-                        continue;
-                    }
-
-                    event = new Event(
-                        title, date, startTime, endTime
-                    );
-                }
-
-                event.setLocation(location);
-                events.add(event);
-
-            } catch (IllegalArgumentException e) {
-                System.err.println(
-                    "Skipping invalid event: " + title
-                    + " (" + e.getMessage() + ")"
-                );
-            }
+        if (!llm.isConfigured()) {
+            throw new IllegalStateException(
+                "Gemini API key is required "
+                + "to extract information from images."
+            );
         }
 
-        return events;
-
-    } catch (JsonParseException | IllegalStateException e) {
-        throw new IllegalArgumentException(
-            "Failed to parse Gemini's event JSON.", e
-        );
+        return llm.analyzeImage(file);
     }
-    }
-    // ========================================
-// EXTRACT IMAGE TEXT
-// ========================================
-
-public String extractImage(File file) {
-
-    Objects.requireNonNull(file, "Image file required");
-
-    if (!file.isFile()) {
-        throw new IllegalArgumentException(
-            "The selected image does not exist."
-        );
-    }
-
-    if (!llm.isConfigured()) {
-        throw new IllegalStateException(
-            "Gemini API key is required "
-            + "to extract information from images."
-        );
-    }
-
-    return llm.analyzeImage(file);
-}
 
     private String getOptionalString(JsonObject obj, String key) {
 
-    if (!obj.has(key) || obj.get(key).isJsonNull()) {
-        return null;
-    }
+        if (!obj.has(key) || obj.get(key).isJsonNull()) {
+            return null;
+        }
 
-    String value = obj.get(key).getAsString().trim();
+        String value = obj.get(key).getAsString().trim();
 
-    return value.isEmpty() ? null : value;
+        return value.isEmpty() ? null : value;
     }
 }

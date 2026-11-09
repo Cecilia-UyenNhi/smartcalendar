@@ -90,7 +90,8 @@ public String analyzeDocument(String extractedText) {
 
     JsonObject textPart = new JsonObject();
 
-    textPart.addProperty(
+    
+textPart.addProperty(
     "text",
     "Extract calendar events and academic deadlines from this document. "
     + "Return ONLY a valid JSON object with an 'events' array. "
@@ -103,32 +104,55 @@ public String analyzeDocument(String extractedText) {
     + "For regular events, preserve startTime and endTime when provided. "
     + "Use null for missing information. "
     + "Do not invent dates, times, or events. "
+
+    + "IMPORTANT TITLE FORMATTING RULE: "
+    + "Identify the course code from the document, such as BIO1001, "
+    + "MATH2030, or EECS3311. "
+    + "Every extracted event title MUST begin with its course code, "
+    + "followed by ' - ' and the event name. "
+    + "For example: 'BIO1001 - Midterm Exam 1', "
+    + "'BIO1001 - Assignment 2', "
+    + "'BIO1001 - Final Exam'. "
+    + "If the course code is written with spaces, normalize it "
+    + "by removing spaces, for example 'BIO 1001' becomes 'BIO1001'. "
+    + "If the event title already starts with the course code, "
+    + "do not repeat it. "
+    + "If the document does not identify a course code, "
+    + "do not invent one. "
+
     + "Do not include Markdown formatting or code fences.\n\n"
     + extractedText
-    );
+);
+
 
     JsonArray parts = new JsonArray();
     parts.add(textPart);
 
     try {
     return sendRequest(parts, DOCUMENT_MODEL);
-
+ 
 } catch (RuntimeException e) {
 
-    // Only switch models when the primary model is overloaded
-    if (e.getMessage() != null
-            && e.getMessage().contains("HTTP 503")) {
+    boolean overloaded =
+        e.getMessage() != null
+        && e.getMessage().contains("HTTP 503");
+
+    boolean timedOut =
+        e.getCause() instanceof java.net.http.HttpTimeoutException;
+
+    if (overloaded || timedOut) {
 
         System.out.println(
-            "Document model unavailable. Switching to fast model..."
+            "Document model unavailable or timed out. "
+            + "Switching to fast model..."
         );
 
         return sendRequest(parts, FAST_MODEL);
     }
 
-    // Other errors should not trigger fallback
     throw e;
 }
+
 }
 
     // Analyze PNG or JPEG images using Gemini
@@ -268,7 +292,7 @@ public String analyzeDocument(String extractedText) {
             .uri(URI.create(url))
             .header("Content-Type", "application/json")
             .header("x-goog-api-key", apiKey)
-            .timeout(Duration.ofSeconds(90))
+            .timeout(Duration.ofSeconds(180))
             .POST(
                 HttpRequest.BodyPublishers.ofString(
                     requestBody.toString()

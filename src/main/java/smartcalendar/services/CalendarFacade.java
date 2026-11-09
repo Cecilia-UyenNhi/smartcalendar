@@ -53,6 +53,9 @@ public class CalendarFacade {
 
         Objects.requireNonNull(event);
 
+        // NEW: Apply matching category rule before saving.
+        event.setCatColor(categoryService.categorize(event));
+
         // Check conflicts before adding.
         // This is a warning-only policy.
         List<Event> conflicts =
@@ -83,6 +86,11 @@ public class CalendarFacade {
     ) {
         Objects.requireNonNull(oldEvent);
         Objects.requireNonNull(updatedEvent);
+
+        // NEW: Reapply rules if the title changes.
+        updatedEvent.setCatColor(
+            categoryService.categorize(updatedEvent)
+        );
 
         List<Event> conflicts =
             conflictService.checkConflict(
@@ -211,11 +219,12 @@ public class CalendarFacade {
     public boolean checkConflict(Event event) {
         return conflictService.hasConflict(event);
     }
-    // Check whether an identical event already exists
-public boolean isDuplicate(Event event) {
-    Objects.requireNonNull(event);
-    return conflictService.isDuplicate(event);
-}
+
+    // Check whether an identical event already exists.
+    public boolean isDuplicate(Event event) {
+        Objects.requireNonNull(event);
+        return conflictService.isDuplicate(event);
+    }
 
     public List<Event> getConflictingEvents(
         Event event
@@ -244,8 +253,17 @@ public boolean isDuplicate(Event event) {
     }
 
     public void removeCategory(String keyword) {
-
         categoryService.removeCategory(keyword);
+    }
+
+    // NEW: Apply saved category rules to an event
+    // without saving the event to the database.
+    public void applyCategoryRule(Event event) {
+        Objects.requireNonNull(event);
+
+        event.setCatColor(
+            categoryService.categorize(event)
+        );
     }
 
     // ========================================

@@ -218,6 +218,8 @@ String prompt = """
     - add a calendar event
     - edit an existing event
     - delete an existing event
+    - assign or change a keyword-based category color
+    - remove a keyword-based category color rule
     - have a normal conversation
 
     For calendar actions, return ONLY a valid JSON object
@@ -267,6 +269,31 @@ For edit requests:
     - Do not claim an operation has been completed.
     - Do not include Markdown code fences around JSON.
 
+    For keyword-based category coloring, return ONLY:
+    {
+      "action": "categorize",
+      "keyword": "text that must appear in event titles",
+      "color": "Green"
+    }
+
+    For removing a keyword-color rule, return ONLY:
+    {
+      "action": "remove_category",
+      "keyword": "text that must appear in event titles"
+    }
+
+    Category rules:
+    - Use "categorize" for requests to assign, set, make, or change
+      the color of all events whose titles contain a keyword.
+    - Extract the keyword exactly as requested, without surrounding
+      phrases like "all events containing" or "in the title".
+    - Supported colors: Red, Orange, Yellow, Green, Blue,
+      Purple, Pink, Brown, Black.
+    - If keyword or color is missing, use null; never guess.
+    - Use "remove_category" only when the user wants to remove
+      the saved keyword-color rule, not delete calendar events.
+    - Do not claim the rule was saved; the application performs it.
+
     For normal conversation, respond with a valid JSON object:
 
     {
@@ -289,6 +316,52 @@ JsonObject result = JsonParser.parseString(response)
 String action = result.get("action").getAsString();
 
 System.out.println("Detected action: " + action);
+if ("categorize".equalsIgnoreCase(action)) {
+    String keyword = getOptionalJsonString(result, "keyword");
+    String color = getOptionalJsonString(result, "color");
+
+    if (keyword == null) {
+        return "Which event-title keyword should I color?";
+    }
+    if (color == null) {
+        return "Which color should I assign to events containing \""
+            + keyword + "\"?";
+    }
+
+    try {
+        long matchingEvents = facade.getEvents().stream()
+            .filter(event -> event.getTitle() != null
+                && event.getTitle().toLowerCase(java.util.Locale.ROOT)
+                    .contains(keyword.toLowerCase(java.util.Locale.ROOT)))
+            .count();
+
+        facade.categorizeEvent(keyword, color);
+        return "Saved the " + color + " color rule for titles containing \""
+            + keyword + "\". Found " + matchingEvents
+            + " matching existing event(s). Future matching events "
+            + "will also use this color.";
+    } catch (IllegalArgumentException e) {
+        return "Could not assign category color: " + e.getMessage();
+    } catch (Exception e) {
+        return "Could not save category color rule: " + e.getMessage();
+    }
+}
+
+if ("remove_category".equalsIgnoreCase(action)) {
+    String keyword = getOptionalJsonString(result, "keyword");
+    if (keyword == null) {
+        return "Which keyword-color rule should I remove?";
+    }
+
+    try {
+        facade.removeCategory(keyword);
+        return "Removed the color rule for titles containing \""
+            + keyword + "\". Existing event colors remain unchanged.";
+    } catch (Exception e) {
+        return "Could not remove category color rule: " + e.getMessage();
+    }
+}
+
 if ("add".equalsIgnoreCase(action)) {
 
     String title = result.get("title").getAsString();
@@ -544,6 +617,15 @@ if ("chat".equalsIgnoreCase(action)) {
 }
 return response;
     }
+    // Safely read optional fields from Gemini's JSON response.
+    private String getOptionalJsonString(JsonObject object, String key) {
+        if (!object.has(key) || object.get(key).isJsonNull()) {
+            return null;
+        }
+        String value = object.get(key).getAsString().trim();
+        return value.isEmpty() ? null : value;
+    }
+
     private String getChangedValue(
     JsonObject changes,
     String key,
