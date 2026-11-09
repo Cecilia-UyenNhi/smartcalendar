@@ -2,6 +2,10 @@
 package smartcalendar.services;
 
 import java.util.Objects;
+import java.util.List;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import smartcalendar.models.Event;
@@ -220,6 +224,7 @@ String prompt = """
     - delete an existing event
     - assign or change a keyword-based category color
     - remove a keyword-based category color rule
+    - query, search, list, or count existing calendar events
     - have a normal conversation
 
     For calendar actions, return ONLY a valid JSON object
@@ -294,6 +299,41 @@ For edit requests:
       the saved keyword-color rule, not delete calendar events.
     - Do not claim the rule was saved; the application performs it.
 
+    For calendar searches and questions, return ONLY:
+    {
+      "action": "query",
+      "keyword": null,
+      "startDate": null,
+      "endDate": null,
+      "type": null,
+      "location": null,
+      "afterTime": null,
+      "beforeTime": null,
+      "upcoming": false,
+      "nextOnly": false,
+      "countOnly": false
+    }
+
+    Query rules:
+    - Use query for questions about saved events, schedules, deadlines,
+      assignments, exams, meetings, dates, locations, and counts.
+    - keyword is a course code or title substring (e.g. EECS3311).
+    - Use YYYY-MM-DD for startDate/endDate; include both dates.
+    - For a single date, set startDate and endDate to that date.
+    - Resolve today, tomorrow, this week, next week, this month,
+      next month, and next N days using today's date above.
+    - Use type: deadline, assignment, exam, meeting, or class when applicable.
+    - Use HH:mm 24-hour time for afterTime and beforeTime.
+    - For morning, use beforeTime "12:00"; for afternoon, use
+      afterTime "12:00" and beforeTime "17:00"; for evening,
+      use afterTime "17:00".
+    - Set upcoming true for future or remaining events.
+    - Set nextOnly true for "next event" and upcoming true.
+    - Set countOnly true when asking how many events match.
+    - Multiple filters may be combined; use null when unspecified.
+    - Do not invent calendar events or answer from general knowledge.
+    - Do not interpret requests to edit or remove events as queries.
+
     For normal conversation, respond with a valid JSON object:
 
     {
@@ -316,6 +356,9 @@ JsonObject result = JsonParser.parseString(response)
 String action = result.get("action").getAsString();
 
 System.out.println("Detected action: " + action);
+if ("query".equalsIgnoreCase(action)) {
+    return handleQuery(result);
+}
 if ("categorize".equalsIgnoreCase(action)) {
     String keyword = getOptionalJsonString(result, "keyword");
     String color = getOptionalJsonString(result, "color");
@@ -617,6 +660,78 @@ if ("chat".equalsIgnoreCase(action)) {
 }
 return response;
     }
+    // Retrieve matching events from SQLite through CalendarFacade.
+    private String handleQuery(JsonObject query) {
+        try {
+            String keyword = getOptionalJsonString(query, "keyword");
+            String type = getOptionalJsonString(query, "type");
+            String location = getOptionalJsonString(query, "location");
+            String startText = getOptionalJsonString(query, "startDate");
+            String endText = getOptionalJsonString(query, "endDate");
+            String afterText = getOptionalJsonString(query, "afterTime");
+            String beforeText = getOptionalJsonString(query, "beforeTime");
+
+            LocalDate start = startText == null ? null : LocalDate.parse(startText);
+            LocalDate end = endText == null ? null : LocalDate.parse(endText);
+            LocalTime after = afterText == null ? null : LocalTime.parse(afterText);
+            LocalTime before = beforeText == null ? null : LocalTime.parse(beforeText);
+
+            boolean upcoming = getJsonBoolean(query, "upcoming");
+            boolean nextOnly = getJsonBoolean(query, "nextOnly");
+            boolean countOnly = getJsonBoolean(query, "countOnly");
+
+            List<Event> matches = facade.queryEvents(
+                keyword, start, end, type, location,
+                after, before,
+                (upcoming || nextOnly) ? LocalDateTime.now() : null
+            );
+
+            if (countOnly) {
+                return "I found " + matches.size() + " matching event(s).";
+            }
+
+            if (matches.isEmpty()) {
+                return "I couldn't find any matching events in your calendar.";
+            }
+
+            int limit = nextOnly ? 1 : matches.size();
+            StringBuilder answer = new StringBuilder(
+                "I found " + (nextOnly ? 1 : matches.size())
+                + " matching event(s):\n\n"
+            );
+
+            for (int i = 0; i < limit; i++) {
+                Event event = matches.get(i);
+                answer.append(i + 1).append(". ")
+                    .append(event.getTitle()).append("\n")
+                    .append("   Date: ").append(event.getDate()).append("\n")
+                    .append("   Time: ").append(event.getStartTime())
+                    .append(" - ").append(event.getEndTime()).append("\n");
+
+                if (event.getLocation() != null
+                        && !event.getLocation().isBlank()) {
+                    answer.append("   Location: ")
+                        .append(event.getLocation()).append("\n");
+                }
+                if (i < limit - 1) {
+                    answer.append("\n");
+                }
+            }
+            return answer.toString();
+
+        } catch (IllegalArgumentException e) {
+            return "I couldn't understand the query filters: " + e.getMessage();
+        } catch (Exception e) {
+            System.err.println("Calendar query failed: " + e.getMessage());
+            return "I couldn't search your calendar right now.";
+        }
+    }
+
+    private boolean getJsonBoolean(JsonObject object, String key) {
+        return object.has(key) && !object.get(key).isJsonNull()
+            && object.get(key).getAsBoolean();
+    }
+
     // Safely read optional fields from Gemini's JSON response.
     private String getOptionalJsonString(JsonObject object, String key) {
         if (!object.has(key) || object.get(key).isJsonNull()) {

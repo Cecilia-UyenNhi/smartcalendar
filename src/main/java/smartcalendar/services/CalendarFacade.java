@@ -11,6 +11,7 @@ import smartcalendar.strategies.WeeklyFreeTime;
 import java.io.File;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Objects;
 
@@ -24,7 +25,6 @@ public class CalendarFacade {
     private final FreeTimeService freeTimeService;
     private final QueryService queryService;
 
-    // Connected later, once Gemini is ready.
     private ImportService importService;
 
     // ========================================
@@ -53,11 +53,8 @@ public class CalendarFacade {
 
         Objects.requireNonNull(event);
 
-        // NEW: Apply matching category rule before saving.
         event.setCatColor(categoryService.categorize(event));
 
-        // Check conflicts before adding.
-        // This is a warning-only policy.
         List<Event> conflicts =
             conflictService.checkConflict(event);
 
@@ -87,7 +84,6 @@ public class CalendarFacade {
         Objects.requireNonNull(oldEvent);
         Objects.requireNonNull(updatedEvent);
 
-        // NEW: Reapply rules if the title changes.
         updatedEvent.setCatColor(
             categoryService.categorize(updatedEvent)
         );
@@ -164,20 +160,87 @@ public class CalendarFacade {
                     );
                 }
 
-                return repo.findByDRange(
-                    dates[0].trim(),
-                    dates[1].trim()
+                return queryService.findByDateRange(
+                    LocalDate.parse(dates[0].trim()),
+                    LocalDate.parse(dates[1].trim())
                 );
             }
 
             case "category":
                 return repo.findByCat(info);
 
+            case "deadline":
+            case "deadlines":
+                return queryService.findDeadlines();
+
+            case "type":
+                return queryService.findByType(info);
+
+            case "location":
+                return queryService.findByLocation(info);
+
+            case "upcoming":
+                return queryService.findUpcomingEvents();
+
+            case "next":
+                Event next = queryService.findNextEvent();
+                return next == null ? List.of() : List.of(next);
+
+            case "after_time":
+                return queryService.findAfterTime(
+                    LocalTime.parse(info)
+                );
+
+            case "before_time":
+                return queryService.findBeforeTime(
+                    LocalTime.parse(info)
+                );
+
+            case "tomorrow_morning":
+                return queryService.findTomorrowMorning();
+
             default:
                 throw new IllegalArgumentException(
                     "Unknown query type: " + queryType
                 );
         }
+    }
+
+    public List<Event> queryEvents(
+        String keyword,
+        LocalDate startDate,
+        LocalDate endDate,
+        String type,
+        String location,
+        LocalTime afterTime,
+        LocalTime beforeTime,
+        LocalDateTime upcomingFrom
+    ) {
+        return queryService.filterEvents(
+            keyword,
+            startDate,
+            endDate,
+            type,
+            location,
+            afterTime,
+            beforeTime,
+            upcomingFrom,
+            false
+        );
+    }
+
+    public int countEvents(
+        String keyword,
+        LocalDate startDate,
+        LocalDate endDate,
+        String type
+    ) {
+        return queryService.countEvents(
+            keyword,
+            startDate,
+            endDate,
+            type
+        );
     }
 
     // ========================================
@@ -192,7 +255,6 @@ public class CalendarFacade {
         Objects.requireNonNull(start);
         Objects.requireNonNull(end);
 
-        // Select strategy based on the date range.
         if (start.toLocalDate().equals(
                 end.toLocalDate())) {
 
@@ -220,7 +282,6 @@ public class CalendarFacade {
         return conflictService.hasConflict(event);
     }
 
-    // Check whether an identical event already exists.
     public boolean isDuplicate(Event event) {
         Objects.requireNonNull(event);
         return conflictService.isDuplicate(event);
@@ -256,8 +317,6 @@ public class CalendarFacade {
         categoryService.removeCategory(keyword);
     }
 
-    // NEW: Apply saved category rules to an event
-    // without saving the event to the database.
     public void applyCategoryRule(Event event) {
         Objects.requireNonNull(event);
 
