@@ -8,6 +8,7 @@ smartcalendar\strategies\HourlyFreeTime.class
 smartcalendar\models\Event.class
 smartcalendar\commands\EditEvent.class
 smartcalendar\gui\CategoryColors.class
+smartcalendar\gui\SmartCalendarUI$3.class
 smartcalendar\commands\DeleteEvent.class
 smartcalendar\gui\ChatBubble.class
 smartcalendar\gui\SmartCalendarUI.class
@@ -19,6 +20,7 @@ smartcalendar\observers\CalendarObserver.class
 smartcalendar\services\QueryService.class
 smartcalendar\database\EventRepo.class
 smartcalendar\services\CategoryService.class
+smartcalendar\cli\SmartCalendarCLI.class
 smartcalendar\database\DataManager.class
 smartcalendar\strategies\FreeTimeStrategy.class
 smartcalendar\gui\SmartCalendarUI$2.class
