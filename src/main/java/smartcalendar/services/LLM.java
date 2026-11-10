@@ -5,29 +5,28 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.file.Files;
 import java.time.Duration;
-import java.util.Base64;
-import java.util.Locale;
 
 public class LLM {
 
     // Fast model for chat and calendar commands
     private static final String FAST_MODEL = "gemini-3.5-flash-lite";
 
-    // Advanced model for PDF and image extraction
+    // Advanced model for PDF document extraction
     private static final String DOCUMENT_MODEL = "gemini-3.8-flash";
 
     private final String apiKey;
     private final HttpClient client;
 
-    // Constructor
+    // ========================================
+    // CONSTRUCTOR
+    // ========================================
+
     public LLM() {
 
         apiKey = System.getenv("GEMINI_API_KEY");
@@ -37,12 +36,18 @@ public class LLM {
                 .build();
     }
 
-    // Check whether an API key has been configured
+    // ========================================
+    // API KEY CONFIGURATION
+    // ========================================
+
     public boolean isConfigured() {
         return apiKey != null && !apiKey.isBlank();
     }
 
-    // Interpret natural-language requests using Gemini
+    // ========================================
+    // NATURAL-LANGUAGE INTERPRETATION
+    // ========================================
+
     public String interpret(String prompt) {
 
         if (prompt == null || prompt.isBlank()) {
@@ -73,205 +78,94 @@ public class LLM {
                  + "Please check your API key and internet connection.";
         }
     }
-    // Analyze extracted PDF text using the document model
-public String analyzeDocument(String extractedText) {
 
-    if (extractedText == null || extractedText.isBlank()) {
-        throw new IllegalArgumentException(
-            "Document text cannot be empty."
-        );
-    }
+    // ========================================
+    // ANALYZE EXTRACTED PDF TEXT
+    // ========================================
 
-    if (!isConfigured()) {
-        throw new IllegalStateException(
-            "Gemini API key is required for document analysis."
-        );
-    }
+    public String analyzeDocument(String extractedText) {
 
-    JsonObject textPart = new JsonObject();
-
-    
-textPart.addProperty(
-    "text",
-    "Extract calendar events and academic deadlines from this document. "
-    + "Return ONLY a valid JSON object with an 'events' array. "
-    + "Each event must contain: title, date, startTime, endTime, "
-    + "dueTime, location, and type. "
-    + "Use YYYY-MM-DD for dates and HH:mm (24-hour) for times. "
-    + "Use type 'deadline' for assignments and submission deadlines, "
-    + "and type 'event' for classes, tests, exams, and meetings. "
-    + "For deadlines without an explicitly stated time, set dueTime to null. "
-    + "For regular events, preserve startTime and endTime when provided. "
-    + "Use null for missing information. "
-    + "Do not invent dates, times, or events. "
-
-    + "IMPORTANT SHORT CALENDAR TITLE RULES: "
-    + "Use concise, readable titles suitable for small calendar cells. "
-    + "When a course code is provided, use COURSECODE followed by one space, "
-    + "then a short event name, e.g. 'ECON1000 Test 1', "
-    + "'EECS3311 Assignment 2', 'BIOLOGY1010 Lab Report 2', "
-    + "'MATH2030 Quiz 3', 'EECS3221 Final Exam'. "
-    + "Normalize spaces inside course codes (EECS 3311 -> EECS3311). "
-    + "Do not add a hyphen after the course code. "
-    + "Avoid redundant course names, descriptions, and words such as "
-    + "'scheduled', 'number', 'submission deadline', and 'examination'. "
-    + "Keep distinguishing details like event numbers and Lab Report versus Lab. "
-    + "Do not invent course codes, event numbers, dates, or times. "
-    + "If the document lacks a course code, use only the short event name. "
-    + "Preserve all extracted dates, times, and event types. "
-
-    + "Do not include Markdown formatting or code fences.\n\n"
-    + extractedText
-);
-
-
-    JsonArray parts = new JsonArray();
-    parts.add(textPart);
-
-    try {
-    return sendRequest(parts, DOCUMENT_MODEL);
- 
-} catch (RuntimeException e) {
-
-    boolean overloaded =
-        e.getMessage() != null
-        && e.getMessage().contains("HTTP 503");
-
-    boolean timedOut =
-        e.getCause() instanceof java.net.http.HttpTimeoutException;
-
-    if (overloaded || timedOut) {
-
-        System.out.println(
-            "Document model unavailable or timed out. "
-            + "Switching to fast model..."
-        );
-
-        return sendRequest(parts, FAST_MODEL);
-    }
-
-    throw e;
-}
-
-}
-
-    // Analyze PNG or JPEG images using Gemini
-    public String analyzeImage(File image) {
+        if (extractedText == null || extractedText.isBlank()) {
+            throw new IllegalArgumentException(
+                "Document text cannot be empty."
+            );
+        }
 
         if (!isConfigured()) {
             throw new IllegalStateException(
-                "Gemini API key is required for image analysis."
+                "Gemini API key is required for document analysis."
             );
         }
 
-        if (image == null || !image.isFile()) {
-            throw new IllegalArgumentException(
-                "Please provide a valid image file."
-            );
-        }
+        JsonObject textPart = new JsonObject();
 
-        return analyzeFile(
-    image,
-    "Extract calendar events and academic deadlines from this image. "
-    + "Return ONLY a valid JSON object with an 'events' array. "
-    + "Each event must contain: title, date, startTime, endTime, "
-    + "dueTime, location, and type. "
-    + "Use YYYY-MM-DD for dates and HH:mm (24-hour) for times. "
-    + "Use type 'deadline' for assignments and submission deadlines, "
-    + "and type 'event' for classes, tests, exams, and meetings. "
-    + "For deadlines without an explicitly stated time, set dueTime to null. "
-    + "Use null for missing information. "
-    + "Do not invent dates, times, or events. "
-    + "IMPORTANT SHORT CALENDAR TITLE RULES: "
-    + "Use COURSECODE and a short event name, separated by one space, "
-    + "such as 'ECON1000 Test 1', 'EECS3311 Assignment 2', "
-    + "'BIOLOGY1010 Lab Report 2', or 'MATH2030 Final Exam'. "
-    + "Remove spaces inside course codes and omit redundant descriptions, "
-    + "course names, 'number', 'submission deadline', and 'examination'. "
-    + "Preserve meaningful event numbers and distinguishing details. "
-    + "Do not invent a course code if none appears in the image. "
-    + "Do not change extracted dates, times, or event types. "
-    + "Do not include Markdown formatting or code fences."
-);
-    }
+        textPart.addProperty(
+            "text",
+            "Extract calendar events and academic deadlines from this document. "
+            + "Return ONLY a valid JSON object with an 'events' array. "
+            + "Each event must contain: title, date, startTime, endTime, "
+            + "dueTime, location, and type. "
+            + "Use YYYY-MM-DD for dates and HH:mm (24-hour) for times. "
+            + "Use type 'deadline' for assignments and submission deadlines, "
+            + "and type 'event' for classes, tests, exams, and meetings. "
+            + "For deadlines without an explicitly stated time, set dueTime to null. "
+            + "For regular events, preserve startTime and endTime when provided. "
+            + "Use null for missing information. "
+            + "Do not invent dates, times, or events. "
 
-    // Convert image into a Gemini API request
-    private String analyzeFile(File file, String prompt) {
+            + "IMPORTANT SHORT CALENDAR TITLE RULES: "
+            + "Use concise, readable titles suitable for small calendar cells. "
+            + "When a course code is provided, use COURSECODE followed by one space, "
+            + "then a short event name, e.g. 'ECON1000 Test 1', "
+            + "'EECS3311 Assignment 2', 'BIOLOGY1010 Lab Report 2', "
+            + "'MATH2030 Quiz 3', 'EECS3221 Final Exam'. "
+            + "Normalize spaces inside course codes (EECS 3311 -> EECS3311). "
+            + "Do not add a hyphen after the course code. "
+            + "Avoid redundant course names, descriptions, and words such as "
+            + "'scheduled', 'number', 'submission deadline', and 'examination'. "
+            + "Keep distinguishing details like event numbers and Lab Report versus Lab. "
+            + "Do not invent course codes, event numbers, dates, or times. "
+            + "If the document lacks a course code, use only the short event name. "
+            + "Preserve all extracted dates, times, and event types. "
 
-        String filename =
-            file.getName().toLowerCase(Locale.ROOT);
-
-        String mimeType;
-
-        if (filename.endsWith(".png")) {
-            mimeType = "image/png";
-
-        } else if (filename.endsWith(".jpg")
-                || filename.endsWith(".jpeg")) {
-            mimeType = "image/jpeg";
-
-        } else {
-            throw new IllegalArgumentException(
-                "Only PNG and JPEG images are supported."
-            );
-        }
-
-        try {
-            byte[] bytes = Files.readAllBytes(file.toPath());
-
-            // Keep inline image uploads reasonably small
-            if (bytes.length > 10 * 1024 * 1024) {
-                throw new IllegalArgumentException(
-                    "Image must be smaller than 10 MB."
-                );
-            }
-
-            String encodedImage =
-                Base64.getEncoder().encodeToString(bytes);
-
-            // Text instructions for Gemini
-            JsonObject textPart = new JsonObject();
-            textPart.addProperty("text", prompt);
-
-            // Image content
-            JsonObject inlineData = new JsonObject();
-            inlineData.addProperty("mime_type", mimeType);
-            inlineData.addProperty("data", encodedImage);
-
-            JsonObject imagePart = new JsonObject();
-            imagePart.add("inline_data", inlineData);
-
-            // Combine instructions and image
-            JsonArray parts = new JsonArray();
-            parts.add(textPart);
-            parts.add(imagePart);
-
-            try {
-    return sendRequest(parts, DOCUMENT_MODEL);
-
-} catch (RuntimeException e) {
-
-    if (e.getMessage() != null
-            && e.getMessage().contains("HTTP 503")) {
-
-        System.out.println(
-            "Image model unavailable. Switching to fast model..."
+            + "Do not include Markdown formatting or code fences.\n\n"
+            + extractedText
         );
 
-        return sendRequest(parts, FAST_MODEL);
-    }
+        JsonArray parts = new JsonArray();
+        parts.add(textPart);
 
-    throw e;
-}
+        try {
+            return sendRequest(parts, DOCUMENT_MODEL);
 
-        } catch (IOException e) {
-            throw new RuntimeException(
-                "Failed to read image file.", e
-            );
+        } catch (RuntimeException e) {
+
+            boolean overloaded =
+                e.getMessage() != null
+                && e.getMessage().contains("HTTP 503");
+
+            boolean timedOut =
+                e.getCause()
+                instanceof java.net.http.HttpTimeoutException;
+
+            if (overloaded || timedOut) {
+
+                System.out.println(
+                    "Document model unavailable or timed out. "
+                    + "Switching to fast model..."
+                );
+
+                return sendRequest(parts, FAST_MODEL);
+            }
+
+            throw e;
         }
     }
 
-    // Send a request to the Gemini REST API
+    // ========================================
+    // SEND GEMINI API REQUEST
+    // ========================================
+
     private String sendRequest(JsonArray parts, String modelID) {
 
         if (!isConfigured()) {
@@ -280,7 +174,6 @@ textPart.addProperty(
             );
         }
 
-        // Construct Gemini request JSON
         JsonObject content = new JsonObject();
         content.add("parts", parts);
 
@@ -290,7 +183,6 @@ textPart.addProperty(
         JsonObject requestBody = new JsonObject();
         requestBody.add("contents", contents);
 
-        // Gemini API endpoint
         String url =
             "https://generativelanguage.googleapis.com/"
             + "v1beta/models/"
@@ -315,7 +207,6 @@ textPart.addProperty(
                 HttpResponse.BodyHandlers.ofString()
             );
 
-            // Handle HTTP errors
             if (response.statusCode() != 200) {
                 throw new RuntimeException(
                     "Gemini API returned HTTP "
@@ -324,7 +215,6 @@ textPart.addProperty(
                 );
             }
 
-            // Parse JSON response
             JsonObject result =
                 JsonParser.parseString(response.body())
                     .getAsJsonObject();
@@ -383,6 +273,7 @@ textPart.addProperty(
             return answer.toString();
 
         } catch (IOException e) {
+
             throw new RuntimeException(
                 "Unable to connect to Gemini API.", e
             );

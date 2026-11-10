@@ -43,7 +43,7 @@ public class ImportService {
     }
 
     // ========================================
-    // IMPORT SCHEDULE
+    // IMPORT SCHEDULE (PDF ONLY)
     // ========================================
 
     public List<Event> importFile(File file) {
@@ -59,32 +59,22 @@ public class ImportService {
         String filename =
             file.getName().toLowerCase(Locale.ROOT);
 
-        String extractedInfo;
-
-        if (filename.endsWith(".pdf")) {
-
-            String pdfText = extractPDF(file);
-
-            if (pdfText.isBlank()) {
-                throw new IllegalArgumentException(
-                    "No readable text found in the PDF."
-                );
-            }
-
-            extractedInfo = llm.analyzeDocument(pdfText);
-
-        } else if (filename.endsWith(".png")
-                || filename.endsWith(".jpg")
-                || filename.endsWith(".jpeg")) {
-
-            extractedInfo = extractImage(file);
-
-        } else {
+        if (!filename.endsWith(".pdf")) {
             throw new IllegalArgumentException(
-                "Unsupported file type. "
-                + "Please select PDF, PNG, or JPEG."
+                "Unsupported file type. Please select a PDF."
             );
         }
+
+        String pdfText = extractPDF(file);
+
+        if (pdfText.isBlank()) {
+            throw new IllegalArgumentException(
+                "No readable text found in the PDF."
+            );
+        }
+
+        String extractedInfo =
+            llm.analyzeDocument(pdfText);
 
         if (extractedInfo.isBlank()) {
             throw new IllegalArgumentException(
@@ -110,6 +100,10 @@ public class ImportService {
 
         return previewEvents;
     }
+
+    // ========================================
+    // SAVE IMPORTED EVENTS
+    // ========================================
 
     public List<Event> saveImportedEvents(List<Event> events) {
 
@@ -256,28 +250,8 @@ public class ImportService {
     }
 
     // ========================================
-    // EXTRACT IMAGE TEXT
+    // JSON HELPER
     // ========================================
-
-    public String extractImage(File file) {
-
-        Objects.requireNonNull(file, "Image file required");
-
-        if (!file.isFile()) {
-            throw new IllegalArgumentException(
-                "The selected image does not exist."
-            );
-        }
-
-        if (!llm.isConfigured()) {
-            throw new IllegalStateException(
-                "Gemini API key is required "
-                + "to extract information from images."
-            );
-        }
-
-        return llm.analyzeImage(file);
-    }
 
     private String getOptionalString(JsonObject obj, String key) {
 

@@ -1,10 +1,8 @@
 # SmartCalendar — AI-Powered Calendar Assistant
 
-SmartCalendar is a Java 21 desktop application developed for **EECS3311: Software Design** at York University.
+SmartCalendar is a Java 21 desktop application that combines a JavaFX calendar interface, a command-line interface (CLI), and an AI assistant named **Sissy**, powered by Google's Gemini API.
 
-The application combines a JavaFX calendar interface, a command-line interface (CLI), and an AI assistant named **Sissy**, powered by Google's Gemini API.
-
-SmartCalendar helps users manage events, organize academic deadlines, search their schedules using natural language, identify scheduling conflicts, find available time slots, and import course schedules from PDF documents or images.
+SmartCalendar helps users manage events, organize academic deadlines, search their schedules using natural language, identify scheduling conflicts, find available time slots, and import course schedules from PDF documents.
 
 ## 1. Requirements
 
@@ -110,6 +108,20 @@ Available commands include:
 
 In chat mode, type `back` to return to the main CLI.
 
+Example CLI Session:
+
+smartcalendar> help
+smartcalendar> list
+smartcalendar> add
+smartcalendar> week
+smartcalendar> chat
+
+You> What events do I have tomorrow?
+Sissy> [Displays matching events]
+
+You> back
+smartcalendar> exit
+
 ## 5. Features
 
 SmartCalendar implements the following ten proposed features.
@@ -124,7 +136,7 @@ SmartCalendar implements the following ten proposed features.
 | F06 | Query Calendar | Search events using filters or natural language |
 | F07 | Find Free Time | Identify available time slots |
 | F08 | Conflict Detection | Detect overlapping events |
-| F09 | Import Course Outline | Extract events and deadlines from PDF or image files |
+| F09 | Import Course Outline | Extract events and deadlines from PDF |
 | F10 | Weekly Schedule | Display events scheduled for the current week |
 
 ### Sissy AI Assistant
@@ -146,8 +158,6 @@ Sissy interprets requests and invokes the appropriate calendar services. Calenda
 SmartCalendar supports importing schedule information from:
 
 - PDF documents
-- PNG images
-- JPEG images
 
 The application extracts event details such as titles, dates, times, and locations using Gemini.
 
@@ -178,3 +188,16 @@ SmartCalendar follows an object-oriented, service-based architecture.
 | `services/CalendarService.java` | Calendar state and observer notifications |
 | `services/QueryService.java` | Event searching and filtering |
 | `services/FreeTimeService.java` | Free-time calculation |
+
+### 7. Sample PDF Files
+
+The `sample-pdf/` directory contains fictional course outlines and employee work schedules for testing SmartCalendar's AI-powered PDF import feature.
+
+To test the feature:
+1. Launch SmartCalendar.
+2. Select the PDF import option.
+3. Choose a document from `sample-pdf/`.
+4. Review the events extracted by Sissy.
+5. Confirm the events to add them to your calendar.
+
+All sample documents contain fictional information and are provided for demonstration purposes.
