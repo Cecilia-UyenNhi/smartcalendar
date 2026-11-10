@@ -14,11 +14,8 @@ import java.time.Duration;
 
 public class LLM {
 
-    // Fast model for chat and calendar commands
-    private static final String FAST_MODEL = "gemini-3.5-flash-lite";
-
-    // Advanced model for PDF document extraction
-    private static final String DOCUMENT_MODEL = "gemini-3.8-flash";
+    // Single model for chat, calendar commands, and PDF extraction
+    private static final String MODEL = "gemini-3.5-flash-lite";
 
     private final String apiKey;
     private final HttpClient client;
@@ -66,7 +63,7 @@ public class LLM {
         parts.add(textPart);
 
         try {
-            return sendRequest(parts, FAST_MODEL);
+            return sendRequest(parts);
 
         } catch (RuntimeException e) {
 
@@ -98,9 +95,8 @@ public class LLM {
         }
 
         JsonObject textPart = new JsonObject();
-
         textPart.addProperty(
-            "text",
+         "text",
             "Extract calendar events and academic deadlines from this document. "
             + "Return ONLY a valid JSON object with an 'events' array. "
             + "Each event must contain: title, date, startTime, endTime, "
@@ -117,7 +113,7 @@ public class LLM {
             + "Use concise, readable titles suitable for small calendar cells. "
             + "When a course code is provided, use COURSECODE followed by one space, "
             + "then a short event name, e.g. 'ECON1000 Test 1', "
-            + "'EECS3311 Assignment 2', 'BIOLOGY1010 Lab Report 2', "
+            + "'EECS3311 Assignment 2', 'BIO1010 Lab Report 2', "
             + "'MATH2030 Quiz 3', 'EECS3221 Final Exam'. "
             + "Normalize spaces inside course codes (EECS 3311 -> EECS3311). "
             + "Do not add a hyphen after the course code. "
@@ -128,6 +124,68 @@ public class LLM {
             + "If the document lacks a course code, use only the short event name. "
             + "Preserve all extracted dates, times, and event types. "
 
+            
+            + "ACADEMIC SUBJECT ABBREVIATION RULES: "
+            + "When an academic event has a subject name but no explicit course code, "
+            + "use a short, recognizable subject abbreviation in the title. "
+            + "Use the following abbreviations: "
+            + "Mathematics -> MATH, "
+            + "Biology -> BIO, "
+            + "Chemistry -> CHEM, "
+            + "Technology -> TECH, "
+            + "Physics -> PHYS, "
+            + "Computer Science -> CS, "
+            + "Economics -> ECON, "
+            + "Statistics -> STAT, "
+            + "Engineering -> ENG, "
+            + "Psychology -> PSYCH, "
+            + "English -> ENG, "
+            + "History -> HIST, "
+            + "Geography -> GEO, "
+            + "Business -> BUS, "
+            + "Accounting -> ACCT, "
+            + "Finance -> FIN. "
+            + "For other subjects, use a common, recognizable abbreviation "
+            + "only when its meaning is unambiguous. "
+            + "If no clear abbreviation exists, retain the original subject name. "
+            + "If an explicit course code is provided, such as EECS3311 or MATH2030, "
+            + "always preserve that code instead of replacing it with a subject abbreviation. "
+            + "Do not invent course numbers. "
+            + "Keep the event type and number after the abbreviation, "
+            + "such as 'BIO Lab Report 1' or 'CHEM Quiz 3'. "
+
+
+            
+            + "GENERAL WORK SCHEDULE RULES: "
+            + "Recognize employee work schedules, shift rosters, staff timetables, "
+            + "and employment-related teaching or tutoring schedules. "
+            + "This includes retail stores, restaurants, fast food, offices, "
+            + "schools, tutoring centers, and other workplaces. "
+            + "Extract each explicitly dated work shift as one calendar event. "
+            + "Use the employer or workplace name as the event title, "
+            + "such as 'Jollibee', 'Garage', 'KFC', or 'McDonald's'. "
+            + "Use the same workplace title consistently for every shift "
+            + "belonging to that employer. "
+            + "Do not include assigned duties, job positions, or shift times "
+            + "in the event title. "
+            + "If the employer or workplace name is not provided, "
+            + "use 'Work Shift' as the title. "
+            + "Preserve each shift's actual date, startTime, and endTime. "
+            + "Set dueTime to null and type to 'event' for work shifts. "
+            + "Preserve the assigned duties and workplace location "
+            + "in the location field when available. "
+            + "Do not invent employer names, dates, times, or duties. "
+            + "Do not create separate events for multiple duties within one shift. "
+            + "Do not classify ordinary academic classes, exams, or personal "
+            + "appointments as employment shifts. "
+
+
+            + "GENERAL EXTRACTION RULES: "
+            + "Only extract activities with identifiable calendar dates. "
+            + "Do not automatically expand general recurring lecture schedules "
+            + "or office hours into individual events unless specific dates "
+            + "are explicitly provided. "
+            + "Preserve all extracted dates, times, and event types. "
             + "Do not include Markdown formatting or code fences.\n\n"
             + extractedText
         );
@@ -135,38 +193,14 @@ public class LLM {
         JsonArray parts = new JsonArray();
         parts.add(textPart);
 
-        try {
-            return sendRequest(parts, DOCUMENT_MODEL);
-
-        } catch (RuntimeException e) {
-
-            boolean overloaded =
-                e.getMessage() != null
-                && e.getMessage().contains("HTTP 503");
-
-            boolean timedOut =
-                e.getCause()
-                instanceof java.net.http.HttpTimeoutException;
-
-            if (overloaded || timedOut) {
-
-                System.out.println(
-                    "Document model unavailable or timed out. "
-                    + "Switching to fast model..."
-                );
-
-                return sendRequest(parts, FAST_MODEL);
-            }
-
-            throw e;
-        }
+        return sendRequest(parts);
     }
 
     // ========================================
     // SEND GEMINI API REQUEST
     // ========================================
 
-    private String sendRequest(JsonArray parts, String modelID) {
+    private String sendRequest(JsonArray parts) {
 
         if (!isConfigured()) {
             throw new IllegalStateException(
@@ -186,14 +220,14 @@ public class LLM {
         String url =
             "https://generativelanguage.googleapis.com/"
             + "v1beta/models/"
-            + modelID
+            + MODEL
             + ":generateContent";
 
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(url))
             .header("Content-Type", "application/json")
             .header("x-goog-api-key", apiKey)
-            .timeout(Duration.ofSeconds(180))
+            .timeout(Duration.ofSeconds(45))
             .POST(
                 HttpRequest.BodyPublishers.ofString(
                     requestBody.toString()
@@ -201,10 +235,25 @@ public class LLM {
             )
             .build();
 
+        long startTime = System.nanoTime();
+
+        System.out.println(
+            "Sending request to Gemini model: " + MODEL
+        );
+
         try {
             HttpResponse<String> response = client.send(
                 request,
                 HttpResponse.BodyHandlers.ofString()
+            );
+
+            long elapsedMs =
+                (System.nanoTime() - startTime) / 1_000_000;
+
+            System.out.println(
+                "Gemini model " + MODEL
+                + " responded in " + elapsedMs + " ms"
+                + " (HTTP " + response.statusCode() + ")"
             );
 
             if (response.statusCode() != 200) {
@@ -273,6 +322,14 @@ public class LLM {
             return answer.toString();
 
         } catch (IOException e) {
+
+            long elapsedMs =
+                (System.nanoTime() - startTime) / 1_000_000;
+
+            System.err.println(
+                "Gemini request failed after "
+                + elapsedMs + " ms: " + e.getMessage()
+            );
 
             throw new RuntimeException(
                 "Unable to connect to Gemini API.", e
