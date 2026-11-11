@@ -1,0 +1,5 @@
+# Created at 2026-11-10T22:00:05.650
+Boot Manifest-JAR contains absolute paths in classpath 'D:\smartcalendar\target\test-classes'
+Hint: <argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true</argLine>
+'other' has different root
+
