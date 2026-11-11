@@ -18,6 +18,10 @@ public class AIAgent {
     private Event pendingDeleteEvent;
     private Event pendingEditOriginal;
     private Event pendingEditUpdated;
+    private List<Event> pendingChoices;
+    private JsonObject pendingEditChanges;
+    private String pendingChoiceAction;
+    private String pendingClarification;
     // ========================================
     // CONSTRUCTOR
     // ========================================
@@ -41,6 +45,33 @@ public class AIAgent {
         }
 
         String userRequest = request.trim();
+        if (pendingClarification != null && (userRequest.equalsIgnoreCase("cancel")
+                || userRequest.equalsIgnoreCase("no"))) {
+            pendingClarification = null;
+            return "Okay, cancelled. No changes were made.";
+        }
+        if (pendingChoices != null) {
+            if (userRequest.equalsIgnoreCase("cancel") || userRequest.equalsIgnoreCase("no")) {
+                clearChoices();
+                return "Okay, I cancelled the selection. No changes were made.";
+            }
+            int choice;
+            try {
+                choice = Integer.parseInt(userRequest);
+            } catch (NumberFormatException e) {
+                return "Please reply with an event number (1-" + pendingChoices.size()
+                    + ") or Cancel.";
+            }
+            if (choice < 1 || choice > pendingChoices.size()) {
+                return "Please choose a number from 1 to " + pendingChoices.size() + ".";
+            }
+            Event chosen = pendingChoices.get(choice - 1);
+            String action = pendingChoiceAction;
+            JsonObject changes = pendingEditChanges;
+            clearChoices();
+            if ("delete".equals(action)) return prepareDelete(chosen);
+            return prepareEdit(chosen, changes);
+        }
         // Handle confirmation for editing an event
 if (pendingEditOriginal != null && pendingEditUpdated != null) {
 
@@ -194,7 +225,9 @@ if (pendingEvent != null) {
         }
 
         try {
-            return interpretRequest(userRequest);
+            String fullRequest = pendingClarification == null ? userRequest
+                : pendingClarification + "\nAdditional details from user: " + userRequest;
+            return interpretRequest(fullRequest);
 
         } catch (Exception e) {
             System.err.println(
@@ -435,250 +468,73 @@ if ("remove_category".equalsIgnoreCase(action)) {
 }
 
 if ("add".equalsIgnoreCase(action)) {
-
-    String title = result.get("title").getAsString();
-    String date = result.get("date").getAsString();
-    String startTime = result.get("startTime").getAsString();
-    String endTime = result.get("endTime").getAsString();
-
-    Event proposedEvent = new Event(
-        title,
-        date,
-        startTime,
-        endTime
-    );
-
-    System.out.println(
-        "Proposed event: " + proposedEvent.getTitle()
-        + " on " + proposedEvent.getDate()
-    );
-    // 1. Check for duplicate events
-if (facade.isDuplicate(proposedEvent)) {
-    return "This event already exists in your calendar:\n\n"
-        + "Title: " + proposedEvent.getTitle() + "\n"
-        + "Date: " + proposedEvent.getDate() + "\n"
-        + "Time: " + proposedEvent.getStartTime()
-        + " - " + proposedEvent.getEndTime()
-        + "\n\nNo duplicate was added.";
-}
-
-// 2. Check for scheduling conflicts
-java.util.List<Event> conflicts =
-    facade.getConflictingEvents(proposedEvent);
-
-String conflictWarning = "";
-
-if (!conflicts.isEmpty()) {
-
-    StringBuilder warning = new StringBuilder(
-        "⚠ Scheduling conflict detected!\n\n"
-        + "This event overlaps with:\n"
-    );
-
-    for (Event existing : conflicts) {
-        warning.append("- ")
-            .append(existing.getTitle())
-            .append(" (")
-            .append(existing.getStartTime())
-            .append(" - ")
-            .append(existing.getEndTime())
-            .append(")\n");
+    String title = getOptionalJsonString(result, "title");
+    String date = getOptionalJsonString(result, "date");
+    String startTime = getOptionalJsonString(result, "startTime");
+    String endTime = getOptionalJsonString(result, "endTime");
+    if (title == null || date == null || startTime == null || endTime == null) {
+        pendingClarification = request;
+        if (title == null) return "What is the title of the event you want to add? Please include its date and time.";
+        if (date == null) return "What date is " + title + " on? Please include the start and end times.";
+        if (startTime == null) return "What time does " + title + " start on " + date + "? Please include its end time.";
+        return "What time does " + title + " end on " + date + "?";
     }
-
-    conflictWarning = warning.toString() + "\n";
-}
-    pendingEvent = proposedEvent;
-
-return conflictWarning
-    + "I found the following event:\n\n"
-    + "Title: " + proposedEvent.getTitle() + "\n"
-    + "Date: " + proposedEvent.getDate() + "\n"
-    + "Time: " + proposedEvent.getStartTime()
-    + " - " + proposedEvent.getEndTime() + "\n\n"
-    + "Would you like me to add this event? (Yes/No)";
+    pendingClarification = null;
+    try {
+        Event proposedEvent = new Event(title, date, startTime, endTime);
+        proposedEvent.setLocation(getOptionalJsonString(result, "location"));
+        if (facade.isDuplicate(proposedEvent)) {
+            return "This event already exists in your calendar. No duplicate was added.";
+        }
+        List<Event> conflicts = facade.getConflictingEvents(proposedEvent);
+        StringBuilder warning = new StringBuilder();
+        if (!conflicts.isEmpty()) {
+            warning.append("Scheduling conflict detected! Overlaps with:\n");
+            for (Event existing : conflicts) {
+                warning.append("- ").append(formatEvent(existing)).append("\n");
+            }
+            warning.append("\n");
+        }
+        pendingEvent = proposedEvent;
+        return warning + "Add this event?\n" + formatEvent(proposedEvent)
+            + "\nReply Yes or No.";
+    } catch (IllegalArgumentException e) {
+        return "I couldn't add that event: " + e.getMessage()
+            + " Please provide a valid date and start/end times.";
+    }
 }
 if ("delete".equalsIgnoreCase(action)) {
-
-    String title = result.get("title").getAsString();
-
-    String date = null;
-
-    if (result.has("date") && !result.get("date").isJsonNull()) {
-        date = result.get("date").getAsString();
+    String title = getOptionalJsonString(result, "title");
+    String date = getOptionalJsonString(result, "date");
+    if (title == null || date == null) {
+        pendingClarification = request;
+        return title == null ? "Which event title do you want to delete? Please include the date."
+            : "What date is the " + title + " event you want to delete?";
     }
-
-    java.util.List<Event> matches = new java.util.ArrayList<>();
-
-    for (Event event : facade.getEvents()) {
-
-        boolean titleMatches =
-            event.getTitle().equalsIgnoreCase(title);
-
-        boolean dateMatches =
-            date == null || event.getDate().equals(date);
-
-        if (titleMatches && dateMatches) {
-            matches.add(event);
-        }
-    }
-
-    System.out.println("Delete matches found: " + matches.size());
-
-    if (matches.isEmpty()) {
-        return "I couldn't find that event in your calendar.";
-    }
-
-    if (matches.size() > 1) {
-        return "I found multiple matching events. "
-             + "Please specify the exact date and time.";
-    }
-
-    Event eventToDelete = matches.get(0);
-
-    pendingDeleteEvent = eventToDelete;
-
-    return "I found this event:\n\n"
-        + "Title: " + eventToDelete.getTitle() + "\n"
-        + "Date: " + eventToDelete.getDate() + "\n"
-        + "Time: " + eventToDelete.getStartTime()
-        + " - " + eventToDelete.getEndTime() + "\n\n"
-        + "Would you like me to DELETE this event? (Yes/No)";
+    pendingClarification = null;
+    List<Event> matches = findMatches(title, date);
+    if (matches.isEmpty()) return "I couldn't find that event in your calendar.";
+    if (matches.size() > 1) return askToChoose(matches, "delete", null);
+    return prepareDelete(matches.get(0));
 }
 if ("edit".equalsIgnoreCase(action)) {
-
-    String title = result.has("title")
-        && !result.get("title").isJsonNull()
-        ? result.get("title").getAsString()
-        : null;
-
-    String date = result.has("date")
-        && !result.get("date").isJsonNull()
-        ? result.get("date").getAsString()
-        : null;
-
-    if (title == null || title.isBlank()) {
-        return "Please specify which event you want to edit.";
+    String title = getOptionalJsonString(result, "title");
+    String date = getOptionalJsonString(result, "date");
+    if (title == null || date == null) {
+        pendingClarification = request;
+        return title == null ? "Which event title do you want to edit? Please include its original date and the change you want."
+            : "What is the original date of " + title + "? Please include the change you want.";
     }
-
-    java.util.List<Event> matches = new java.util.ArrayList<>();
-
-    for (Event event : facade.getEvents()) {
-
-        boolean titleMatches =
-            event.getTitle().equalsIgnoreCase(title);
-
-        boolean dateMatches =
-            date == null || event.getDate().equals(date);
-
-        if (titleMatches && dateMatches) {
-            matches.add(event);
-        }
+    pendingClarification = null;
+    if (!result.has("changes") || !result.get("changes").isJsonObject()) {
+        pendingClarification = request;
+        return "What would you like to change about that event?";
     }
-
-    if (matches.isEmpty()) {
-        return "I couldn't find that event in your calendar.";
-    }
-
-    if (matches.size() > 1) {
-        return "I found multiple matching events. "
-             + "Please specify the exact date and time.";
-    }
-
-    Event originalEvent = matches.get(0);
-    // Get the changes requested by the user
-if (!result.has("changes")
-        || !result.get("changes").isJsonObject()) {
-
-    return "I couldn't identify what you want to change. "
-         + "Please try again.";
-}
-
-JsonObject changes = result.getAsJsonObject("changes");
-
-System.out.println(
-    "Requested changes: " + changes
-);
-String newTitle = getChangedValue(
-    changes, "title", originalEvent.getTitle()
-);
-
-String newDate = getChangedValue(
-    changes, "date", originalEvent.getDate()
-);
-
-String newStart = getChangedValue(
-    changes, "startTime", originalEvent.getStartTime()
-);
-
-String newEnd = getChangedValue(
-    changes, "endTime", originalEvent.getEndTime()
-);
-
-String newLocation = getChangedValue(
-    changes, "location", originalEvent.getLocation()
-);
-
-// Preserve the original duration if only the start time changes
-if (changes.has("startTime")
-        && !changes.get("startTime").isJsonNull()
-        && (!changes.has("endTime")
-            || changes.get("endTime").isJsonNull())) {
-
-    java.time.LocalTime oldStart =
-        java.time.LocalTime.parse(originalEvent.getStartTime());
-
-    java.time.LocalTime oldEnd =
-        java.time.LocalTime.parse(originalEvent.getEndTime());
-
-    java.time.Duration duration =
-        java.time.Duration.between(oldStart, oldEnd);
-
-    java.time.LocalTime updatedStart =
-        java.time.LocalTime.parse(newStart);
-
-    if (duration.isNegative() || duration.isZero()
-            || duration.toMinutes() >= 1440
-            || updatedStart.toSecondOfDay()
-               + duration.getSeconds() >= 86400) {
-        return "The updated time is invalid or extends past midnight.";
-    }
-
-    newEnd = updatedStart.plus(duration).toString();
-}
-
-// Construct the updated event without saving it
-Event updatedEvent = new Event(
-    newTitle,
-    newDate,
-    newStart,
-    newEnd
-);
-
-updatedEvent.setLocation(newLocation);
-updatedEvent.setCatColor(originalEvent.getCatColor());
-// Store the original and updated events
-pendingEditOriginal = originalEvent;
-pendingEditUpdated = updatedEvent;
-
-// Show the proposed changes
-return "I found the event you want to edit:\n\n"
-    + "Current event:\n"
-    + "Title: " + originalEvent.getTitle() + "\n"
-    + "Date: " + originalEvent.getDate() + "\n"
-    + "Time: " + originalEvent.getStartTime()
-    + " - " + originalEvent.getEndTime() + "\n"
-    + "Location: " + originalEvent.getLocation() + "\n\n"
-
-    + "Updated event:\n"
-    + "Title: " + updatedEvent.getTitle() + "\n"
-    + "Date: " + updatedEvent.getDate() + "\n"
-    + "Time: " + updatedEvent.getStartTime()
-    + " - " + updatedEvent.getEndTime() + "\n"
-    + "Location: " + updatedEvent.getLocation() + "\n\n"
-
-    + "Would you like me to save these changes? (Yes/No)";
-
-    
+    JsonObject changes = result.getAsJsonObject("changes");
+    List<Event> matches = findMatches(title, date);
+    if (matches.isEmpty()) return "I couldn't find that event in your calendar.";
+    if (matches.size() > 1) return askToChoose(matches, "edit", changes);
+    return prepareEdit(matches.get(0), changes);
 }
 if ("chat".equalsIgnoreCase(action)) {
     if (result.has("message") && !result.get("message").isJsonNull()) {
@@ -689,6 +545,97 @@ if ("chat".equalsIgnoreCase(action)) {
 }
 return response;
     }
+    private List<Event> findMatches(String title, String date) {
+        List<Event> matches = new java.util.ArrayList<>();
+        for (Event event : facade.getEvents()) {
+            if (event.getTitle().equalsIgnoreCase(title)
+                    && event.getDate().equals(date)) matches.add(event);
+        }
+        matches.sort(java.util.Comparator.comparing(Event::getStartTime)
+            .thenComparing(Event::getEndTime));
+        return matches;
+    }
+
+    private String formatEvent(Event event) {
+        return event.getTitle() + " | " + event.getDate() + " | "
+            + event.getStartTime() + " - " + event.getEndTime()
+            + (event.getLocation() == null || event.getLocation().isBlank()
+                ? "" : " | " + event.getLocation());
+    }
+
+    private String askToChoose(List<Event> matches, String action, JsonObject changes) {
+        pendingChoices = new java.util.ArrayList<>(matches);
+        pendingChoiceAction = action;
+        pendingEditChanges = changes;
+        StringBuilder message = new StringBuilder(
+            "I found multiple matching events. Which one would you like to "
+                + action + "?\n\n");
+        for (int i = 0; i < matches.size(); i++) {
+            message.append(i + 1).append(". ").append(formatEvent(matches.get(i)))
+                .append("\n");
+        }
+        return message.append("\nReply with a number (1-" + matches.size()
+            + ") or Cancel.").toString();
+    }
+
+    private void clearChoices() {
+        pendingChoices = null;
+        pendingChoiceAction = null;
+        pendingEditChanges = null;
+    }
+
+    private String prepareDelete(Event event) {
+        pendingDeleteEvent = event;
+        return "I found this event:\n" + formatEvent(event)
+            + "\n\nWould you like me to DELETE it? (Yes/No)";
+    }
+
+    private String prepareEdit(Event original, JsonObject changes) {
+        if (changes == null) return "What would you like to change?";
+        try {
+            String title = getChangedValue(changes, "title", original.getTitle());
+            String date = getChangedValue(changes, "date", original.getDate());
+            String start = getChangedValue(changes, "startTime", original.getStartTime());
+            String end = getChangedValue(changes, "endTime", original.getEndTime());
+            String location = getChangedValue(changes, "location", original.getLocation());
+            if (changes.has("startTime") && !changes.get("startTime").isJsonNull()
+                    && (!changes.has("endTime") || changes.get("endTime").isJsonNull())) {
+                java.time.Duration duration = java.time.Duration.between(
+                    LocalTime.parse(original.getStartTime()),
+                    LocalTime.parse(original.getEndTime()));
+                LocalTime newStart = LocalTime.parse(start);
+                if (newStart.toSecondOfDay() + duration.getSeconds() >= 86400) {
+                    return "The updated event would extend past midnight. Please specify an end time.";
+                }
+                end = newStart.plus(duration).toString();
+            }
+            Event updated = new Event(title, date, start, end);
+            updated.setLocation(location);
+            updated.setCatColor(original.getCatColor());
+            pendingEditOriginal = original;
+            pendingEditUpdated = updated;
+            StringBuilder response = new StringBuilder(
+                "Current event:\n" + formatEvent(original)
+                + "\n\nUpdated event:\n" + formatEvent(updated));
+            List<Event> conflicts = facade.getConflictingEvents(updated).stream()
+                .filter(e -> !(e.getTitle().equals(original.getTitle())
+                    && e.getDate().equals(original.getDate())
+                    && e.getStartTime().equals(original.getStartTime())
+                    && e.getEndTime().equals(original.getEndTime())
+                    && Objects.equals(e.getLocation(), original.getLocation())))
+                .toList();
+            if (!conflicts.isEmpty()) {
+                response.append("\n\nScheduling conflict with:\n");
+                for (Event conflict : conflicts) {
+                    response.append("- ").append(formatEvent(conflict)).append("\n");
+                }
+            }
+            return response.append("\n\nSave these changes? (Yes/No)").toString();
+        } catch (Exception e) {
+            return "I couldn't prepare that edit: " + e.getMessage();
+        }
+    }
+
     // Find available intervals using the existing Strategy pattern.
     private String handleFindFreeTime(JsonObject request) {
         try {

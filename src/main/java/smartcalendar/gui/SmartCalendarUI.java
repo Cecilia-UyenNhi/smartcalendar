@@ -66,6 +66,8 @@ public class SmartCalendarUI {
 
     private final GridPane monthGrid = new GridPane();
     private final ListView<Event> weeklyList = new ListView<>();
+    private final Label emptyWeekLabel = new Label(
+        "Hurray! You have no schedule!");
 
     private final Label monthLabel = new Label();
     private final Label weekRangeLabel = new Label();
@@ -328,6 +330,11 @@ public class SmartCalendarUI {
             }
         });
 
+        emptyWeekLabel.setWrapText(true);
+        emptyWeekLabel.setStyle("-fx-text-fill: " + PRIMARY + ";-fx-padding: 8;");
+        emptyWeekLabel.setVisible(false);
+        emptyWeekLabel.setManaged(false);
+
         weeklyList.getSelectionModel()
             .selectedItemProperty()
             .addListener((obs, oldEvent, newEvent) -> {
@@ -378,7 +385,7 @@ public class SmartCalendarUI {
         );
 
         VBox weeklyCard = new VBox(
-            8, compactWeeklyHeader, weeklyList
+            8, compactWeeklyHeader, emptyWeekLabel, weeklyList
         );
 
         weeklyCard.setPadding(new Insets(10));
@@ -1264,7 +1271,8 @@ importThread.start();
                 .toList();
 
         weeklyList.getItems().setAll(weekEvents);
-
+        emptyWeekLabel.setVisible(weekEvents.isEmpty());
+        emptyWeekLabel.setManaged(weekEvents.isEmpty());
         weeklyList.refresh();
     }
 
