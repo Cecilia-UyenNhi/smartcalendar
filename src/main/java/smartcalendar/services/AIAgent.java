@@ -545,16 +545,25 @@ if ("chat".equalsIgnoreCase(action)) {
 }
 return response;
     }
-    private List<Event> findMatches(String title, String date) {
-        List<Event> matches = new java.util.ArrayList<>();
-        for (Event event : facade.getEvents()) {
-            if (event.getTitle().equalsIgnoreCase(title)
-                    && event.getDate().equals(date)) matches.add(event);
+    
+private List<Event> findMatches(String title, String date) {
+    List<Event> matches = new java.util.ArrayList<>();
+
+    for (Event event : facade.getEvents()) {
+        if (event.getTitle() != null
+                && event.getTitle().toLowerCase(java.util.Locale.ROOT)
+                    .contains(title.trim().toLowerCase(java.util.Locale.ROOT))
+                && event.getDate().equals(date)) {
+            matches.add(event);
         }
-        matches.sort(java.util.Comparator.comparing(Event::getStartTime)
-            .thenComparing(Event::getEndTime));
-        return matches;
     }
+
+    matches.sort(java.util.Comparator.comparing(Event::getStartTime)
+        .thenComparing(Event::getEndTime));
+
+    return matches;
+}
+
 
     private String formatEvent(Event event) {
         return event.getTitle() + " | " + event.getDate() + " | "

@@ -5,8 +5,7 @@ import smartcalendar.database.EventRepo;
 import smartcalendar.models.Event;
 import smartcalendar.commands.*;
 
-import smartcalendar.strategies.HourlyFreeTime;
-import smartcalendar.strategies.WeeklyFreeTime;
+import smartcalendar.strategies.*;
 
 import java.io.File;
 import java.time.LocalDate;

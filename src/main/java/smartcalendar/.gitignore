@@ -12,6 +12,7 @@ target/
 .vscode/
 
 # Local database
+calendarDB
 *.db
 *.db-journal
 *.sqlite
