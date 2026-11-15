@@ -141,7 +141,7 @@ public class LLM {
             + "Psychology -> PSYCH, "
             + "English -> ENG, "
             + "History -> HIST, "
-            + "Geography -> GEO, "
+            + "Geography -> GEO, "  
             + "Business -> BUS, "
             + "Accounting -> ACCT, "
             + "Finance -> FIN. "

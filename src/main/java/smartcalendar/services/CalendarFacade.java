@@ -345,6 +345,19 @@ public class CalendarFacade {
 
         return importService.importFile(file);
     }
+    
+    public List<Event> saveImportedEvents(List<Event> events) {
+        if (importService == null) {
+            throw new IllegalStateException(
+                "ImportService is not connected yet."
+            );
+        }
+
+        Objects.requireNonNull(events, "Events cannot be null");
+
+        return importService.saveImportedEvents(events);
+    }
+
 
     // ========================================
     // READ ALL EVENTS

@@ -339,6 +339,7 @@ For edit requests:
       "keyword": null,
       "startDate": null,
       "endDate": null,
+      "color": null,
       "type": null,
       "location": null,
       "afterTime": null,
@@ -351,7 +352,7 @@ For edit requests:
     Query rules:
     - Use query for questions about saved events, schedules, deadlines,
       assignments, exams, meetings, dates, locations, and counts.
-    - keyword is a course code or title substring (e.g. EECS3311).
+    - keyword is a course code or title substring (e.g. EECS311).
     - Use YYYY-MM-DD for startDate/endDate; include both dates.
     - For a single date, set startDate and endDate to that date.
     - Resolve today, tomorrow, this week, next week, this month,
@@ -361,6 +362,10 @@ For edit requests:
     - For morning, use beforeTime "12:00"; for afternoon, use
       afterTime "12:00" and beforeTime "17:00"; for evening,
       use afterTime "17:00".
+    - For requests to show, list, find, or count events by color,
+      use action "query" and set "color" to the requested color.
+    - Example: "Show all green events" means color = "Green".
+    - Do not use "categorize" unless the user wants to change colors.
     - Set upcoming true for future or remaining events.
     - Set nextOnly true for "next event" and upcoming true.
     - Set countOnly true when asking how many events match.
@@ -718,6 +723,7 @@ private List<Event> findMatches(String title, String date) {
             String keyword = getOptionalJsonString(query, "keyword");
             String type = getOptionalJsonString(query, "type");
             String location = getOptionalJsonString(query, "location");
+            String color = getOptionalJsonString(query, "color");
             String startText = getOptionalJsonString(query, "startDate");
             String endText = getOptionalJsonString(query, "endDate");
             String afterText = getOptionalJsonString(query, "afterTime");
@@ -737,6 +743,20 @@ private List<Event> findMatches(String title, String date) {
                 after, before,
                 (upcoming || nextOnly) ? LocalDateTime.now() : null
             );
+
+            if (color != null) {
+            List<Event> colorMatches =
+                facade.queryCalendar("category", color);
+
+                matches = matches.stream()
+                    .filter(event -> colorMatches.stream()
+                        .anyMatch(matching -> matching == event
+                            || (matching.getTitle().equals(event.getTitle())
+                                && matching.getDate().equals(event.getDate())
+                                && matching.getStartTime().equals(event.getStartTime())
+                                && matching.getEndTime().equals(event.getEndTime()))))
+                    .toList();
+            }
 
             if (countOnly) {
                 return "I found " + matches.size() + " matching event(s).";

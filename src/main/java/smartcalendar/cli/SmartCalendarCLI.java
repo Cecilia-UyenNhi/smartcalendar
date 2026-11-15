@@ -145,17 +145,74 @@ public final class SmartCalendarCLI {
         else { System.out.println("Conflicts found:"); printEvents(conflicts); }
     }
 
-    private void importFile(String path) {
-        if (path == null || path.isBlank()) path = read("File path> ");
-        path = path.trim();
-        if (path.startsWith("\"") && path.endsWith("\"") && path.length() >= 2)
-            path = path.substring(1, path.length() - 1);
-        File file = new File(path);
-        if (!file.isFile()) { System.out.println("File not found: " + path); return; }
-        List<Event> imported = facade.importSchedule(file);
-        System.out.println("Import returned " + imported.size() + " event(s).");
-        printEvents(imported);
+    
+
+private void importFile(String path) {
+    if (path == null || path.isBlank()) {
+        path = read("File path> ");
     }
+
+    path = path.trim();
+
+    if (path.startsWith("\"")
+            && path.endsWith("\"")
+            && path.length() >= 2) {
+        path = path.substring(1, path.length() - 1);
+    }
+
+    File file = new File(path);
+
+    if (!file.isFile()) {
+        System.out.println("File not found: " + path);
+        return;
+    }
+
+    // Step 1: Extract events without saving
+    List<Event> imported = facade.importSchedule(file);
+
+    if (imported.isEmpty()) {
+        System.out.println("No new events to import.");
+        return;
+    }
+
+    // Step 2: Preview extracted events
+    System.out.println(
+        "Extracted " + imported.size() + " event(s):"
+    );
+    printEvents(imported);
+
+    // Step 3: Ask for confirmation
+    while (true) {
+        String answer = read(
+            "Save these events to the calendar? (y/n)> "
+        );
+
+        if (answer.equalsIgnoreCase("y")
+                || answer.equalsIgnoreCase("yes")) {
+
+            // Step 4: Save confirmed events
+            List<Event> saved =
+                facade.saveImportedEvents(imported);
+
+            System.out.println(
+                "Successfully saved " + saved.size() + " event(s)."
+            );
+            return;
+        }
+
+        if (answer.equalsIgnoreCase("n")
+                || answer.equalsIgnoreCase("no")) {
+            System.out.println(
+                "Import cancelled. No events were saved."
+            );
+            return;
+        }
+
+        System.out.println(
+            "Invalid input. Please enter y or n."
+        );
+    }
+}
 
     private void chat() {
         System.out.println("Sissy chat: type 'back' to return to the CLI.");
