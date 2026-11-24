@@ -1,0 +1,75 @@
+
+# SmartCalendar - CLI Feature Demonstration
+# This text file provides input for CLI batch execution.
+# Demonstrates and verifies all 10 implemented features.
+
+
+# F01 - Calendar Display (Deterministic)
+
+month
+
+
+# F02 - Add Event (Hybrid)
+
+Add CLI Demo Lecture on December 15, 2026 from 10am to 12pm at Room 101.
+yes
+
+
+# F03 - Categorize Event (Hybrid)
+
+Categorize all events containing CLI Demo as yellow.
+
+
+# F04 - Edit Event (Hybrid)
+
+Change the location of CLI Demo Lecture on December 15, 2026 to Room 202.
+yes
+
+
+# F05 - Delete Event (Hybrid)
+
+Add CLI Demo Meeting on December 16, 2026 from 9am to 10am.
+yes
+Delete CLI Demo Meeting on December 16, 2026.
+yes
+
+
+# F06 - Query Calendar (Hybrid)
+
+search
+title
+CLI Demo Lecture
+
+
+# F07 - Free-Time Finder (Hybrid)
+
+free
+2026-12-15T09:00
+2026-12-15T17:00
+1.5
+
+
+# F08 - Schedule Conflict Detection (Hybrid)
+
+conflicts
+CLI Demo Workshop
+2026-12-15
+11:00
+13:00
+
+
+# F09 - Import Course Schedule (Hybrid)
+
+import "src/sample-pdf/Fast_Food_Job_Schedule_Fall_2026.pdf"
+only 1
+yes
+
+
+# F10 - Weekly Schedule (Deterministic)
+
+week
+
+
+# End of Demonstration
+
+exit

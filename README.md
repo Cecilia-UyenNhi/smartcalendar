@@ -77,67 +77,158 @@ This launches the graphical calendar interface.
 
 ### Command-Line Interface (CLI)
 
-Run:
+SmartCalendar provides a standalone CLI that allows users to access calendar features and interact with Sissy directly from a terminal without launching the JavaFX GUI.
+
+The CLI supports two input methods:
+- **Interactive Mode:** Accepts commands and natural language requests through standard input.
+- **Task File Mode:** Accepts a text file containing a sequence of commands, natural language requests, and follow-up responses.
+
+#### Interactive Mode
+
+From the project root directory, run:
 
 ```powershell
 mvn clean compile
 mvn exec:java "-Dexec.mainClass=smartcalendar.cli.SmartCalendarCLI"
 ```
 
-The CLI provides text-based access to calendar features.
-
-Available commands include:
+Available commands:
 
 | Command | Description |
 |---|---|
 | `help` | Display available commands |
-| `list` | Display stored events |
+| `list` | Display all stored events |
 | `today` | Display today's events |
-| `week` | Display weekly events |
-| `month` | Display monthly events |
+| `tomorrow` | Display tomorrow's events |
+| `week` | Display the current weekly schedule |
+| `month` | Display the current monthly schedule |
 | `add` | Add an event |
 | `edit` | Modify an existing event |
 | `delete` | Delete an event |
-| `search` | Search calendar events |
+| `categorize` | Assign, update, or remove category rules |
+| `search` | Search calendar events using filters |
 | `free` | Find available time slots |
-| `category` | Manage event categories |
-| `import` | Import course schedules |
-| `deadlines` | Display academic deadlines |
+| `conflicts` | Check for scheduling conflicts |
+| `import` | Import events from a PDF document |
+| `deadlines` | Display deadlines within the next seven days |
 | `chat` | Start a conversation with Sissy |
-| `exit` | Exit the application |
+| `exit` or `quit` | Exit the application |
+
+Users can also enter natural language requests directly without selecting a predefined command.
 
 In chat mode, type `back` to return to the main CLI.
 
-Example CLI Session:
+Example CLI session:
 
+```text
 smartcalendar> help
 smartcalendar> list
-smartcalendar> add
 smartcalendar> week
 smartcalendar> chat
-
 You> What events do I have tomorrow?
 Sissy> [Displays matching events]
-
 You> back
 smartcalendar> exit
+```
+
+#### Task File Mode (Batch Execution)
+
+SmartCalendar supports standalone batch execution through the `-input` command-line option. This allows users to provide a text file containing multiple requests and execute them sequentially without manually entering each command.
+
+
+##### Input File Format
+
+The input file supports:
+
+- Predefined CLI commands.
+- Natural language requests interpreted by Sissy.
+- Answers to follow-up questions.
+- Confirmation and cancellation responses (`yes` or `no`).
+- PDF file paths and event selection instructions.
+- Comments beginning with `#`.
+- Empty lines for readability.
+
+Each non-empty, non-comment line is processed sequentially. Follow-up answers and confirmation responses must appear immediately after the corresponding request in the expected order.
+
+Example input file:
+
+```text
+# Add an event
+Add CLI Demo Lecture on December 15, 2026 from 10am to 12pm.
+yes
+
+# Categorize the event
+Categorize all events containing CLI Demo as blue.
+
+# Query the event
+search
+title
+CLI Demo Lecture
+
+# Import selected events from a PDF
+import "src/sample-pdf/Fast_Food_Job_Schedule_Fall_2026.pdf"
+only 1
+yes
+
+# Display the weekly schedule
+week
+
+exit
+```
+
+##### Running the Provided task.txt File
+
+The repository includes a `task.txt` file located in the project root directory. This file provides a working example of standalone CLI execution and demonstrates all ten implemented calendar features (F01–F10), including both deterministic and AI-powered operations.
+
+Project structure:
+
+```text
+smartcalendar/
+├── src/
+│   ├── main/
+│   ├── test/
+│   └── sample-pdf/
+├── pom.xml
+├── README.md
+└── task.txt
+```
+
+To execute the provided task file, run the following command from the project root directory:
+
+```powershell
+mvn compile exec:java "-Dexec.mainClass=smartcalendar.cli.SmartCalendarCLI" "-Dexec.args=-input task.txt"
+```
+
+The CLI reads the input file, executes each request, displays the corresponding results and follow-up responses in the terminal, and terminates after processing the file.
+
+Users can also create their own text files and supply the corresponding file path through the `-input` option.
+
+##### Execution Notes
+
+- The Gemini API key must be configured before executing AI-powered operations.
+- Deterministic commands can execute without accessing the Gemini API.
+- Batch execution introduces a delay before AI requests to reduce the likelihood of exceeding Gemini API rate limits.
+- Both execution modes share the same calendar services and persistent SQLite database as the GUI.
+- For reproducible demonstration results, use a clean test database. Existing events may affect duplicate detection, scheduling conflicts, and PDF import results.
+- Scripted follow-up responses assume that the preceding operation produces the expected prompt.
+- Calendar and weekly schedules are displayed in text format when using the CLI.
 
 ## 5. Features
 
 SmartCalendar implements the following ten proposed features.
 
-| ID | Feature | Description |
-|---|---|---|
-| F01 | Calendar Display | View events in a graphical calendar |
-| F02 | Add Event | Create events manually or using Sissy |
-| F03 | Categorize Event | Assign colors based on keywords |
-| F04 | Edit Event | Modify existing calendar events |
-| F05 | Delete Event | Remove events from the calendar |
-| F06 | Query Calendar | Search events using filters or natural language |
-| F07 | Find Free Time | Identify available time slots |
-| F08 | Conflict Detection | Detect overlapping events |
-| F09 | Import Course Outline | Extract events and deadlines from PDF |
-| F10 | Weekly Schedule | Display events scheduled for the current week |
+| ID | Feature | Classification | Description |
+|---|---|---|---|
+| F01 | Calendar Display | Deterministic | Display stored calendar events |
+| F02 | Add Event | Hybrid | Create events using natural language |
+| F03 | Categorize Event | Hybrid | Assign colors based on keyword rules |
+| F04 | Edit Event | Hybrid | Modify existing calendar events |
+| F05 | Delete Event | Hybrid | Remove existing calendar events |
+| F06 | Query Calendar | Hybrid | Search events using filters or natural language |
+| F07 | Free-Time Finder | Hybrid | Identify available time slots |
+| F08 | Schedule Conflict Detection | Hybrid | Detect overlapping and duplicated events |
+| F09 | Import Course Schedule | Hybrid | Extract and import events from PDF documents |
+| F10 | Weekly Schedule | Deterministic | Display events scheduled for the current week |
 
 ### Sissy AI Assistant
 
@@ -169,9 +260,35 @@ For example:
 - `EECS3311 Assignment 2`
 - `MATH2030 Quiz 3`
 
-Users can preview extracted events before saving them to the calendar.
+### Import through the GUI
 
-In the CLI, use the `import` command to select a file.
+1. Launch SmartCalendar.
+2. Select the PDF import option.
+3. Choose a document from `src/sample-pdf/`.
+4. Review the extracted events.
+5. Select the desired events and confirm the import.
+
+### Import through the CLI
+
+Enter the `import` command followed by the file path:
+
+```text
+import "src/sample-pdf/Fast_Food_Job_Schedule_Fall_2026.pdf"
+```
+
+After reviewing the extracted events, users can choose from the following options:
+
+| Selection | Description |
+|---|---|
+| `all` | Import all extracted events |
+| `none` | Cancel the import |
+| `exclude 2` | Import all events except event 2 |
+| `exclude 2,5` | Exclude multiple events |
+| `only 1,3` | Import only the specified events |
+
+The CLI displays the selected events for final confirmation before saving them to the calendar.
+
+PDF import is also supported in task file mode. The provided `task.txt` includes an example of selective PDF import.
 
 ## 6. Software Architecture
 
@@ -189,15 +306,9 @@ SmartCalendar follows an object-oriented, service-based architecture.
 | `services/QueryService.java` | Event searching and filtering |
 | `services/FreeTimeService.java` | Free-time calculation |
 
-### 7. Sample PDF Files
 
-The `sample-pdf/` directory contains fictional course outlines and employee work schedules for testing SmartCalendar's AI-powered PDF import feature.
+## 7. Sample PDF Files
 
-To test the feature:
-1. Launch SmartCalendar.
-2. Select the PDF import option.
-3. Choose a document from `sample-pdf/`.
-4. Review the events extracted by Sissy.
-5. Confirm the events to add them to your calendar.
+The `src/sample-pdf/` directory contains fictional course outlines and employee work schedules for testing SmartCalendar's AI-powered PDF import feature.
 
 All sample documents contain fictional information and are provided for demonstration purposes.

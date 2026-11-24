@@ -11,10 +11,14 @@ import java.io.File;
 import java.time.*;
 import java.time.temporal.TemporalAdjusters;
 import java.util.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.io.IOException;
 
 /** Terminal interface to the same SmartCalendar services used by JavaFX. */
 public final class SmartCalendarCLI {
-    private final Scanner input = new Scanner(System.in);
+    private Scanner input = new Scanner(System.in);
+    private boolean batchMode = false;
     private final CalendarFacade facade;
     private final AIAgent agent;
 
@@ -26,49 +30,134 @@ public final class SmartCalendarCLI {
         agent = new AIAgent(facade);
     }
 
+    
     public static void main(String[] args) {
-        new SmartCalendarCLI().run();
+
+        // Mode 1: Interactive CLI
+        if (args.length == 0) {
+            new SmartCalendarCLI().run();
+            return;
+        }
+
+        // Mode 2: Execute a task from a file
+        if (args.length == 2 && args[0].equalsIgnoreCase("-input")) {
+            new SmartCalendarCLI().runTaskFile(args[1]);
+            return;
+        }
+
+        // Invalid command-line arguments
+        System.out.println("Invalid arguments.");
+        System.out.println("Supported options:");
+        System.out.println("  No arguments: Start interactive CLI");
+        System.out.println("  -input <file>: Execute a task from a text file");
     }
+
 
     public void run() {
         System.out.println("Welcome to SmartCalendar CLI. Type 'help' for commands.");
+
         while (true) {
             System.out.print("smartcalendar> ");
+
             if (!input.hasNextLine()) return;
+
             String line = input.nextLine().trim();
+
+            if (batchMode) {
+                System.out.println(line);
+        }
+
             if (line.isEmpty()) continue;
-            String[] parts = line.split("\\s+", 2);
-            String command = parts[0].toLowerCase(Locale.ROOT);
+
+            String command = line.toLowerCase(Locale.ROOT);
+
             try {
+                // Handle file import with a supplied path
+                // Handle file import with a supplied path
+                if (command.startsWith("import ")) {
+                    String path = line.substring(7).trim();
+
+                    int firstQuote = path.indexOf('"');
+                    int lastQuote = path.lastIndexOf('"');
+
+                    if (firstQuote != -1 && lastQuote > firstQuote) {
+                        path = path.substring(firstQuote + 1, lastQuote);
+                    }
+
+                    importFile(path);
+                    continue;
+                }
+
+                // Match exact commands only
                 switch (command) {
-                    case "exit", "quit" -> { System.out.println("Goodbye!"); return; }
+                    case "exit", "quit" -> {
+                        System.out.println("Goodbye!");
+                        return;
+                    }
+
                     case "help" -> help();
+
                     case "list" -> printEvents(facade.getEvents());
-                    case "today" -> printEvents(facade.queryCalendar("date", LocalDate.now().toString()));
-                    case "tomorrow" -> printEvents(facade.queryCalendar("date", LocalDate.now().plusDays(1).toString()));
-                    case "week" -> showRange(LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)), 7);
+
+                    case "today" -> printEvents(
+                        facade.queryCalendar("date",
+                            LocalDate.now().toString())
+                    );
+
+                    case "tomorrow" -> printEvents(
+                        facade.queryCalendar("date",
+                            LocalDate.now().plusDays(1).toString())
+                    );
+
+                    case "week" -> showRange(
+                        LocalDate.now().with(
+                            TemporalAdjusters.previousOrSame(
+                                DayOfWeek.MONDAY)), 7
+                    );
+
                     case "month" -> {
                         YearMonth month = YearMonth.now();
                         showRange(month.atDay(1), month.lengthOfMonth());
                     }
+
                     case "deadlines" -> showDeadlines();
+
                     case "search" -> search();
+
                     case "free" -> findFree();
+
                     case "conflicts" -> conflicts();
-                    case "import" -> importFile(parts.length > 1 ? parts[1] : null);
+
+                    case "import" -> importFile(null);
+
                     case "chat" -> chat();
+
                     case "add", "edit", "delete", "categorize" -> {
-                        System.out.println("Describe your request to Sissy (type 'back' to cancel):");
+                        System.out.println(
+                            "Describe your request to Sissy (type 'back' to cancel):"
+                        );
+
                         String request = read("You> ");
+
                         if (!request.equalsIgnoreCase("back")) {
-                            System.out.println("Sissy> " + agent.handleRequest(request));
+                            System.out.println(
+                                "Sissy> " + agent.handleRequest(request)
+                            );
                         }
                     }
+
+                    // Forward complete natural language requests
                     default -> {
-                        // Natural language is accepted directly at the CLI prompt.
-                        System.out.println("Sissy> " + agent.handleRequest(line));
+                        if (batchMode) {
+                            Thread.sleep(6000);
+                        }
+
+                        System.out.println(
+                            "Sissy> " + agent.handleRequest(line)
+                        );
                     }
                 }
+
             } catch (Exception e) {
                 System.out.println("Error: " + e.getMessage());
             }
@@ -147,72 +236,207 @@ public final class SmartCalendarCLI {
 
     
 
-private void importFile(String path) {
-    if (path == null || path.isBlank()) {
-        path = read("File path> ");
-    }
+    private void importFile(String path) {
+        if (path == null || path.isBlank()) {
+            path = read("File path> ");
+        }
 
-    path = path.trim();
+        path = path.trim();
 
-    if (path.startsWith("\"")
-            && path.endsWith("\"")
-            && path.length() >= 2) {
-        path = path.substring(1, path.length() - 1);
-    }
+        if (path.startsWith("\"")
+                && path.endsWith("\"")
+                && path.length() >= 2) {
+            path = path.substring(1, path.length() - 1);
+        }
 
-    File file = new File(path);
+        File file = new File(path);
 
-    if (!file.isFile()) {
-        System.out.println("File not found: " + path);
-        return;
-    }
+        if (!file.isFile()) {
+            System.out.println("File not found: " + path);
+            return;
+        }
 
-    // Step 1: Extract events without saving
-    List<Event> imported = facade.importSchedule(file);
-
-    if (imported.isEmpty()) {
-        System.out.println("No new events to import.");
-        return;
-    }
-
-    // Step 2: Preview extracted events
-    System.out.println(
-        "Extracted " + imported.size() + " event(s):"
-    );
-    printEvents(imported);
-
-    // Step 3: Ask for confirmation
-    while (true) {
-        String answer = read(
-            "Save these events to the calendar? (y/n)> "
+        // Step 1: Extract events without saving
+        List<Event> imported = new ArrayList<>(
+            facade.importSchedule(file)
         );
 
-        if (answer.equalsIgnoreCase("y")
-                || answer.equalsIgnoreCase("yes")) {
-
-            // Step 4: Save confirmed events
-            List<Event> saved =
-                facade.saveImportedEvents(imported);
-
-            System.out.println(
-                "Successfully saved " + saved.size() + " event(s)."
-            );
+        if (imported.isEmpty()) {
+            System.out.println("No new events to import.");
             return;
         }
 
-        if (answer.equalsIgnoreCase("n")
-                || answer.equalsIgnoreCase("no")) {
-            System.out.println(
-                "Import cancelled. No events were saved."
-            );
-            return;
-        }
+        // Step 2: Sort events to match displayed numbering
+        imported.sort(
+            Comparator.comparing(Event::getDate)
+                .thenComparing(Event::getStartTime)
+                .thenComparing(Event::getTitle)
+        );
 
         System.out.println(
-            "Invalid input. Please enter y or n."
+            "Extracted " + imported.size() + " event(s):"
         );
+
+        printEvents(imported);
+
+        // Step 3: Allow users to select events
+        System.out.println("""
+            Import options:
+            all             Import all events
+            none            Cancel import
+            exclude 10      Exclude event 10
+            exclude 2,5,10  Exclude multiple events
+            only 1,3,5      Import selected events only
+            """);
+
+        while (true) {
+            String answer = read("Your selection> ")
+                .toLowerCase(Locale.ROOT);
+
+            List<Event> selected = new ArrayList<>();
+
+            if (answer.equals("none") || answer.equals("no")
+                    || answer.equals("n")) {
+                System.out.println("Import cancelled.");
+                return;
+            }
+
+            if (answer.equals("all") || answer.equals("yes")
+                    || answer.equals("y")) {
+                selected.addAll(imported);
+
+            } else if (answer.startsWith("exclude ")
+                    || answer.startsWith("only ")) {
+
+                boolean exclude = answer.startsWith("exclude ");
+
+                String numbers = answer.substring(
+                    exclude ? 8 : 5
+                ).trim();
+
+                Set<Integer> indexes = new HashSet<>();
+
+                try {
+                    for (String number : numbers.split(",", -1)) {
+                        int index = Integer.parseInt(number.trim());
+
+                        if (index < 1 || index > imported.size()) {
+                            throw new IllegalArgumentException();
+                        }
+
+                        indexes.add(index);
+                    }
+
+                    for (int i = 0; i < imported.size(); i++) {
+                        boolean contains = indexes.contains(i + 1);
+
+                        if (exclude ? !contains : contains) {
+                            selected.add(imported.get(i));
+                        }
+                    }
+
+                } catch (IllegalArgumentException e) {
+                    System.out.println(
+                        "Invalid event number. Please try again."
+                    );
+                    continue;
+                }
+
+            } else {
+                System.out.println("Invalid selection. Try again.");
+                continue;
+            }
+
+            if (selected.isEmpty()) {
+                System.out.println("No events selected.");
+                continue;
+            }
+
+            // Step 4: Preview selected events
+            System.out.println(
+                selected.size() + " of " + imported.size()
+                + " events selected:"
+            );
+
+            printEvents(selected);
+
+            // Step 5: Final confirmation
+            while (true) {
+                String confirm = read("Confirm import? (y/n)> ");
+
+                if (confirm.equalsIgnoreCase("y")
+                        || confirm.equalsIgnoreCase("yes")) {
+
+                    List<Event> saved =
+                        facade.saveImportedEvents(selected);
+
+                    System.out.println(
+                        "Successfully saved " + saved.size()
+                        + " event(s)."
+                    );
+                    return;
+                }
+
+                if (confirm.equalsIgnoreCase("n")
+                        || confirm.equalsIgnoreCase("no")) {
+                    System.out.println(
+                        "No events saved. Please select again."
+                    );
+                    break;
+                }
+
+                System.out.println("Please enter y or n.");
+            }
+        }
     }
-}
+
+
+   
+    private void runTaskFile(String filePath) {
+        try {
+            Path path = Path.of(filePath);
+
+            if (!Files.isRegularFile(path)) {
+                System.out.println("Task file not found: " + filePath);
+                return;
+            }
+
+            List<String> tasks = Files.readAllLines(path)
+                .stream()
+                .map(String::trim)
+                .filter(line -> !line.isEmpty())
+                .filter(line -> !line.startsWith("#"))
+                .toList();
+
+            if (tasks.isEmpty()) {
+                System.out.println("Task file is empty.");
+                return;
+            }
+
+            System.out.println("SmartCalendar - Task File Mode");
+            System.out.println("Reading tasks from: " + filePath);
+            System.out.println("Total input lines: " + tasks.size());
+
+            batchMode = true;
+
+            // Use the task file instead of standard input
+            input = new Scanner(String.join("\n", tasks));
+
+            // Reuse existing CLI commands and follow-up questions
+            run();
+
+            System.out.println("\nAll input lines processed.");
+
+        } catch (IOException e) {
+            System.out.println("Unable to read task file: " + e.getMessage());
+
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+
+        } finally {
+            batchMode = false;
+        }
+    }
 
     private void chat() {
         System.out.println("Sissy chat: type 'back' to return to the CLI.");
@@ -226,8 +450,18 @@ private void importFile(String path) {
 
     private String read(String prompt) {
         System.out.print(prompt);
-        if (!input.hasNextLine()) throw new IllegalStateException("Input closed");
-        return input.nextLine().trim();
+
+        if (!input.hasNextLine()) {
+            throw new IllegalStateException("Input closed");
+        }
+
+        String answer = input.nextLine().trim();
+
+        if (batchMode) {
+            System.out.println(answer);
+        }
+
+        return answer;
     }
 
     private void printEvents(List<Event> events) {
