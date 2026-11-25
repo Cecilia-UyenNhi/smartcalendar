@@ -60,7 +60,7 @@ CLI Demo Workshop
 
 # F09 - Import Course Schedule (Hybrid)
 
-import "src/sample-pdf/Fast_Food_Job_Schedule_Fall_2026.pdf"
+import "src/main/java/smartcalendar/sample-pdf/Fast_Food_Job_Schedule_Fall_2026.pdf"
 only 1
 yes
 
